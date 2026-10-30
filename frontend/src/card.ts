@@ -8,7 +8,7 @@ import { BuildingController } from "./building-controller.ts";
 import "./components/room-panel.ts";
 import "./components/view3d.ts";
 import { languageReady, loadLanguage, translate, type I18nKey } from "./i18n.ts";
-import { infoStyles, renderInfoTiles } from "./info-view.ts";
+import { infoStyles, readInfoHidden, renderInfoTiles, writeInfoHidden } from "./info-view.ts";
 import type { Building } from "./model.ts";
 import { controls, tokens } from "./styles.ts";
 import { groundFloor } from "./solar.ts";
@@ -42,6 +42,7 @@ export class Floorplan3dCard extends LitElement {
     _heat: { state: true },
     _explode: { state: true },
     _roomNames: { state: true },
+    _infoHidden: { state: true },
     _fullscreen: { state: true },
     _pseudoFull: { state: true },
     _vh: { state: true },
@@ -65,6 +66,7 @@ export class Floorplan3dCard extends LitElement {
   private declare _explode: boolean | null;
   /** Room names switched on or off with the card's chip (null: as configured by room_names). */
   private declare _roomNames: boolean | null;
+  private declare _infoHidden: boolean;
   private declare _fullscreen: boolean;
   /** Full screen made by the card itself (no Fullscreen API): spread over the page. */
   private declare _pseudoFull: boolean;
@@ -104,6 +106,7 @@ export class Floorplan3dCard extends LitElement {
     this._heat = null;
     this._explode = null;
     this._roomNames = null;
+    this._infoHidden = readInfoHidden();
     this._fullscreen = false;
     this._pseudoFull = false;
     this._vh = window.innerHeight;
@@ -526,7 +529,10 @@ clearTimeout(this.cleanTimer);
    */
   private renderInfo(b: Building | null | undefined) {
     if (this._fullscreen || this._clean) return nothing;
-    return renderInfoTiles(this.hass, b, this._config?.info_cards);
+    return renderInfoTiles(this.hass, b, this._config?.info_cards, false, this._infoHidden, () => {
+      this._infoHidden = !this._infoHidden;
+      writeInfoHidden(this._infoHidden);
+    });
   }
 
   static styles = [

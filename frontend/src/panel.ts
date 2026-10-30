@@ -10,7 +10,7 @@ import "./components/view3d.ts";
 import { languageReady, loadLanguage, translate, type I18nKey } from "./i18n.ts";
 import type { Building, StartView } from "./model.ts";
 import { controls, tokens } from "./styles.ts";
-import { infoStyles, renderInfoTiles } from "./info-view.ts";
+import { infoStyles, readInfoHidden, renderInfoTiles, writeInfoHidden } from "./info-view.ts";
 import type { HomeAssistant } from "./types.ts";
 import type { MarkerMode } from "./components/view3d.ts";
 import type { HeatMode } from "./heatmap.ts";
@@ -93,6 +93,7 @@ export class Floorplan3dPanel extends LitElement {
     _cameraWall: { state: true },
     _clean: { state: true },
     _navWrap: { state: true },
+    _infoHidden: { state: true },
     _optsOpen: { state: true },
     _pinHover: { state: true },
     _accent: { state: true },
@@ -154,6 +155,7 @@ export class Floorplan3dPanel extends LitElement {
   private declare _clean: boolean;
   /** The floor and room bar wraps onto several lines instead of scrolling sideways (remembered on this device). */
   private declare _navWrap: boolean;
+  private declare _infoHidden: boolean;
   /** Phones: the view options (quality, look, markers, FPS) folded behind ⚙ (#131). */
   private declare _optsOpen: boolean;
   /** The pointer is on 📌: the 3D view marks the point it turns about, the middle of a saved start view (#733). */
@@ -224,6 +226,7 @@ export class Floorplan3dPanel extends LitElement {
     this._cameraWall = false;
     this._clean = prefs.get("clean") === "1";
     this._navWrap = prefs.get("nav_wrap") === "1";
+    this._infoHidden = readInfoHidden();
     this._optsOpen = false;
     this._pinHover = false;
     this._weather = prefs.get("weather") !== "0";
@@ -966,7 +969,10 @@ export class Floorplan3dPanel extends LitElement {
           ${this._navWrap ? "\u2194" : "\u2261"}
         </button>
       </nav>`}
-      ${this._clean || tt ? nothing : renderInfoTiles(this.hass, b)}
+      ${this._clean || tt ? nothing : renderInfoTiles(this.hass, b, undefined, true, this._infoHidden, () => {
+            this._infoHidden = !this._infoHidden;
+            writeInfoHidden(this._infoHidden);
+          })}
       <div class="fp3d-stage-wrap ${this._roomId ? "fp3d-room-open" : ""} ${this._controlsRight ? "fp3d-side-right" : ""} ${tt ? "fp3d-tt" : ""}">
         <fp3d-view3d
           class="fp3d-body"
