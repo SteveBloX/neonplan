@@ -30,7 +30,8 @@ import { doorbellCamera, doorbellEntities, directorOnHere, HOLD_DEFAULT, HOLD_MA
 import { deviceSensors, energySummary, flowSegments, gridPoint, powerSensorFor, proposeEnergySensors, type EnergyPrefs, type FlowSegment, proposeMeters } from "../energy.ts";
 import { CLIMATE_ATTRS, isPulseDrive, isStatusSensor, robotRoomSensor, TOGGLE_KINDS } from "../devices.ts";
 import { activeSections, sectionFloor, dormerParent, effectiveDormer, proposeDormer, sectionGeometry, floorOutline, polygonBox, headroomLines, ridgeHeight, sectionAbove, sectionCutsBelow, roofSectionsFromRooms, sectionFrame, sectionTurn, turnPoint, turnSectionAbout, wallTopUnder } from "../roof-sections.ts";
-import { bestFace, clampField, faceAt, faceCompass, fieldFace, fieldModules, GROUND, moveField, pointOnFace, proposeField, proposeGroundField, proposeWindow, proposeWallField, roofFaces, rowCounts, turnGroundField, fieldCenter, wallFaces, windowAsField, windowCorners, onFace, onField, rayOnFace, type RoofFace } from "../solar.ts";
+import { spaSteps } from "../spa.ts";
+import { bestFace, clampField, faceAt, faceCompass, fieldCells, fieldFace, fieldModules, GROUND, moveField, pointOnFace, proposeField, proposeGroundField, proposeWindow, proposeWallField, roofFaces, rowCounts, turnGroundField, fieldCenter, wallFaces, windowAsField, windowCorners, onFace, onField, rayOnFace, type RoofFace } from "../solar.ts";
 import type { SurfaceGrab, SurfaceRay } from "../viewer/viewer3d.ts";
 import { storedImageIds } from "../transfer.ts";
 import { fromWall, furnitureOnWall, openingsOnWall, roomEdgeFrame, slideAlong, toWall, type WallFrame } from "../geometry/wall-frame.ts";
@@ -50,6 +51,7 @@ import { type CarLinks, type Background, OUTDOOR_TOP, sidelightLayout, DEFAULT_W
   type PoolPort,
   type PoolJoint,
   type ValvePosition,
+  gateKind,
 } from "../model.ts";
 import { furnishRoom, PACKAGES, type PackageId } from "../packages.ts";
 import { edgeReach, generateWalls, locateOpening, openingHost, pointOnRoomEdge, type Wall } from "../geometry/walls.ts";
@@ -120,6 +122,7 @@ import {
   type MarkerShow,
   MARKER_SHOWS,
   type OutdoorArea,
+  type SpaSettings,
   type OutdoorType,
   type RoofType,
   type Placement,
@@ -3840,7 +3843,7 @@ export class Fp3dEditor extends LitElement {
               ?disabled=${!admin}
               @change=${(e: Event) => {
                 const key = (e.target as HTMLSelectElement).value;
-                const keep = { portrait: f.portrait, look: f.look, name: f.name, string: f.string, entity: f.entity, module_w: f.module_w, module_h: f.module_h, wp: f.wp };
+                const keep = { portrait: f.portrait, look: f.look, name: f.name, string: f.string, entity: f.entity, module_entities: f.module_entities, module_w: f.module_w, module_h: f.module_h, wp: f.wp };
                 // on another face the field keeps its modules and is laid out anew there (#258)
                 if (key === GROUND) set({ ...proposeGroundField(this._doc, f.id), ...keep, rows: f.rows, cols: f.cols });
                 const next = faces.find((x) => x.key === key);
@@ -3890,9 +3893,11 @@ export class Fp3dEditor extends LitElement {
           <button aria-pressed=${f.portrait === false} ?disabled=${!admin} @click=${() => set({ portrait: false })}>${this.t("solar_landscape")}</button>
         </div>
         <div class="fp3d-seg fp3d-dev-source">
-          <button aria-pressed=${f.look !== "blue"} ?disabled=${!admin} @click=${() => set({ look: "black" })}>${this.t("solar_look_black")}</button>
+          <button aria-pressed=${f.look !== "blue" && f.look !== "fill"} ?disabled=${!admin} @click=${() => set({ look: "black" })}>${this.t("solar_look_black")}</button>
           <button aria-pressed=${f.look === "blue"} ?disabled=${!admin} @click=${() => set({ look: "blue" })}>${this.t("solar_look_blue")}</button>
+          <button aria-pressed=${f.look === "fill"} ?disabled=${!admin} title=${this.t("solar_look_fill_hint")} @click=${() => set({ look: "fill" })}>${this.t("solar_look_fill")}</button>
         </div>
+        ${f.look === "fill" ? html`<p class="fp3d-sub">${this.t("solar_look_fill_hint")}</p>` : nothing}
         <div class="fp3d-form">
           ${this.len(this.t("solar_module_w"), f.module_w ?? 1.13, (v) => set({ module_w: Math.max(0.3, Math.min(3, round(v))) }), 0.01, 0.3)}
           ${this.len(this.t("solar_module_h"), f.module_h ?? 1.72, (v) => set({ module_h: Math.max(0.3, Math.min(3, round(v))) }), 0.01, 0.3)}
@@ -3930,6 +3935,22 @@ export class Fp3dEditor extends LitElement {
         <p class="fp3d-sub">
           ${this.t("solar_summary", { n, kwp: formatNumber(this.hass, (n * (f.wp ?? 400)) / 1000, 1) })}${n < total ? html` · <b>${this.t("solar_partial", { n, total })}</b>` : nothing}
         </p>
+        <details class="fp3d-dev-source" ?open=${Object.keys(f.module_entities ?? {}).length > 0}>
+          <summary><b>⚡ ${this.t("solar_module_sensors")}</b> · ${Object.values(f.module_entities ?? {}).filter((id) => id && id !== "none").length} / ${fieldCells(f).length}</summary>
+          <p class="fp3d-sub">${this.t("solar_module_sensors_hint")}</p>
+          <div class="fp3d-form">
+            ${fieldCells(f).map((cell) => {
+              const [r, c] = cell.split(":").map(Number);
+              const setModule = (v: string | null) => {
+                const next = { ...(f.module_entities ?? {}) };
+                if (v === null || v === "none") delete next[cell];
+                else next[cell] = v;
+                set({ module_entities: Object.keys(next).length ? next : null });
+              };
+              return this.entitySelect(this.t("solar_module_n", { row: r + 1, col: c + 1 }), f.module_entities?.[cell] ?? null, undefined, power, setModule);
+            })}
+          </div>
+        </details>
         <h4 class="fp3d-lib-head">🔗 ${this.t("solar_string")}</h4>
         <div class="fp3d-form">
           <label class="fp3d-field fp3d-wide"
@@ -6433,7 +6454,7 @@ export class Fp3dEditor extends LitElement {
                 </select></label
               >`
           : nothing}
-        ${a.type === "pool" ? this.renderPoolShape(a) : nothing}
+        ${a.type === "pool" ? this.renderPoolShape(a) : nothing} ${a.type === "pool" ? this.renderSpaFields(a) : nothing}
         <label class="fp3d-check fp3d-wide" title=${this.t("outdoor_outline_hint")}
           ><input type="checkbox" .checked=${a.outline !== false} ?disabled=${!admin} @change=${(ev: Event) => this.updateOutdoor({ outline: (ev.target as HTMLInputElement).checked ? undefined : false })} />
           ${this.t("outdoor_outline")}</label
@@ -9732,6 +9753,68 @@ export class Fp3dEditor extends LitElement {
   }
 
   /** A pool's shape and size (a round one by its diameter, an oval one by its box) and whether it stands above ground. */
+  /**
+   * A pool that is a spa (free): its climate and four switches, where its pump unit stands, and the water colours by
+   * temperature (steps from cold to hot).
+   */
+  private renderSpaFields(a: OutdoorArea) {
+    const admin = this.isAdmin;
+    const spa = a.spa;
+    if (!spa) {
+      return html`<label class="fp3d-check fp3d-wide" title=${this.t("spa_hint")}
+        ><input type="checkbox" .checked=${false} ?disabled=${!admin} @change=${(ev: Event) => (ev.target as HTMLInputElement).checked && this.updateOutdoor({ spa: {} })} />
+        ${this.t("spa")}</label
+      >`;
+    }
+    const setSpa = (patch: Partial<SpaSettings>) => this.updateOutdoor({ spa: { ...spa, ...patch } });
+    const pick = (v: string | null) => (v && v !== "none" ? v : null);
+    const switches = this.entityOptions((id) => /^(switch|input_boolean)\./.test(id));
+    const steps = spaSteps(spa);
+    const own = !!spa.colors?.length;
+    const setSteps = (next: { t: number; color: string }[]) => setSpa({ colors: next.length ? next : null });
+    const sides = ["n", "e", "s", "w"] as const;
+    const side = spa.unit_side ?? "e";
+    const placed = spa.unit_x != null || spa.unit_z != null;
+    return html`<label class="fp3d-check fp3d-wide" title=${this.t("spa_hint")}
+        ><input type="checkbox" .checked=${true} ?disabled=${!admin} @change=${(ev: Event) => !(ev.target as HTMLInputElement).checked && this.updateOutdoor({ spa: null })} />
+        ${this.t("spa")}</label
+      >
+      ${this.entitySelect(this.t("spa_climate"), spa.climate ?? null, undefined, this.entityOptions((id) => id.startsWith("climate.")), (v) => setSpa({ climate: pick(v) }))}
+      ${this.entitySelect(this.t("spa_bubbles"), spa.bubbles ?? null, undefined, switches, (v) => setSpa({ bubbles: pick(v) }))}
+      ${this.entitySelect(this.t("spa_jets"), spa.jets ?? null, undefined, switches, (v) => setSpa({ jets: pick(v) }))}
+      ${this.entitySelect(this.t("spa_filter"), spa.filter ?? null, undefined, switches, (v) => setSpa({ filter: pick(v) }))}
+      ${this.entitySelect(this.t("spa_sanitizer"), spa.sanitizer ?? null, undefined, switches, (v) => setSpa({ sanitizer: pick(v) }))}
+      <div class="fp3d-wide"><b>${this.t("spa_unit")}</b></div>
+      <div class="fp3d-seg fp3d-wide">
+        ${sides.map((s) => html`<button aria-pressed=${!placed && side === s} ?disabled=${!admin} @click=${() => setSpa({ unit_side: s, unit_x: null, unit_z: null, unit_rotation: null })}>${this.t(`spa_side_${s}` as I18nKey)}</button>`)}
+      </div>
+      ${this.len(this.t("x"), spa.unit_x ?? 0, (v) => setSpa({ unit_x: Math.round(v * 100) / 100, unit_z: spa.unit_z ?? centroid(a.points)[1] }), 0.05)}
+      ${this.len(this.t("z"), spa.unit_z ?? 0, (v) => setSpa({ unit_z: Math.round(v * 100) / 100, unit_x: spa.unit_x ?? centroid(a.points)[0] }), 0.05)}
+      ${placed ? this.num(this.t("spa_unit_rotation"), spa.unit_rotation ?? 0, (v) => setSpa({ unit_rotation: ((Math.round(v) % 360) + 360) % 360 }), 5) : nothing}
+      <p class="fp3d-sub fp3d-wide">${this.t("spa_unit_hint")}</p>
+      <div class="fp3d-wide"><b>${this.t("spa_colors")}</b></div>
+      ${steps.map(
+        (s, i) => html`<div class="fp3d-wide" style="display:flex;gap:8px;align-items:center">
+          <input type="number" step="0.5" style="width:84px" ?disabled=${!admin} .value=${String(s.t)} @change=${(e: Event) => {
+            const t = Number((e.target as HTMLInputElement).value);
+            if (Number.isFinite(t)) setSteps(steps.map((x, k) => (k === i ? { ...x, t } : x)));
+          }} />
+          <span>°C</span>
+          <input type="color" ?disabled=${!admin} .value=${s.color} @change=${(e: Event) => setSteps(steps.map((x, k) => (k === i ? { ...x, color: (e.target as HTMLInputElement).value } : x)))} />
+          <button class="fp3d-chip" ?disabled=${!admin || steps.length < 2} title=${this.t("delete")} @click=${() => setSteps(steps.filter((_, k) => k !== i))}>×</button>
+        </div>`,
+      )}
+      <div class="fp3d-actions fp3d-wide">
+        <button class="fp3d-chip" ?disabled=${!admin || steps.length >= 12} @click=${() => setSteps([...steps, { t: Math.round(((steps[steps.length - 1]?.t ?? 30) + 2) * 2) / 2, color: steps[steps.length - 1]?.color ?? "#ff6a3a" }])}>+ ${this.t("spa_step_add")}</button>
+        ${own ? html`<button class="fp3d-chip" ?disabled=${!admin} @click=${() => setSpa({ colors: null })}>${this.t("spa_colors_reset")}</button>` : nothing}
+      </div>
+      <label class="fp3d-check fp3d-wide"
+        ><input type="checkbox" .checked=${spa.blend !== false} ?disabled=${!admin} @change=${(ev: Event) => setSpa({ blend: (ev.target as HTMLInputElement).checked })} />
+        ${this.t("spa_blend")}</label
+      >
+      <p class="fp3d-sub fp3d-wide">${this.t("spa_colors_hint")}</p>`;
+  }
+
   private renderPoolShape(a: OutdoorArea) {
     const admin = this.isAdmin;
     const b = bounds(a.points);
@@ -11953,6 +12036,66 @@ export class Fp3dEditor extends LitElement {
       <p class="fp3d-sub fp3d-wide">${this.t("awning_hint")}</p>`;
   }
 
+  /** A 3D printer: the sensors beyond its print status (progress, time left, temperatures) and its chamber light – all found by name when left empty. */
+  private renderPrinterFields(f: Furniture) {
+    const sensors = this.entityOptions((id) => /^(sensor|input_number|number)\./.test(id));
+    const pick = (v: string | null) => (v === "none" ? "none" : v);
+    const sel = (label: I18nKey, key: "printer_progress" | "printer_remaining" | "printer_nozzle" | "printer_bed" | "printer_light", options: { id: string; label: string }[]) =>
+      this.entitySelect(this.t(label), f[key] ?? null, undefined, options, (v) => this.updateFurniture({ [key]: pick(v) } as Partial<Furniture>));
+    return html`${sel("printer_progress", "printer_progress", sensors)} ${sel("printer_remaining", "printer_remaining", sensors)} ${sel("printer_nozzle", "printer_nozzle", sensors)}
+      ${sel("printer_bed", "printer_bed", sensors)} ${sel("printer_light", "printer_light", this.entityOptions((id) => /^(light|switch|input_boolean)\./.test(id)))}
+      <p class="fp3d-sub fp3d-wide">${this.t("printer_hint")}</p>`;
+  }
+
+  /** A built-in fireplace: how tall the fire opening is and how high above the floor it starts. */
+  private renderFireplaceFields(f: Furniture) {
+    return html`${this.len(this.t("fire_height"), f.fire_height ?? 0.7, (v) => this.updateFurniture({ fire_height: Math.max(0.3, Math.min(3, Math.round(v * 100) / 100)) }), 0.05, 0.3)}
+      ${this.len(this.t("fire_y"), f.fire_y ?? 0.4, (v) => this.updateFurniture({ fire_y: Math.max(0, Math.min(3, Math.round(v * 100) / 100)) }), 0.05, 0)}
+      <p class="fp3d-sub fp3d-wide">${this.t("fireplace_hint")}</p>`;
+  }
+
+  /** A gate: its kind (two leaves, one, sliding) and the entities that tell whether it is open – contact, lock, position. */
+  private renderGateFields(f: Furniture) {
+    const admin = this.isAdmin;
+    const sensors = this.entityOptions((id) => id.startsWith("sensor.") || id.startsWith("input_number.") || id.startsWith("number."));
+    // each kind with the sizes it usually has: width with the posts, thickness, height of the leaves
+    const KINDS: Record<string, { w: number; d: number; h: number }> = {
+      double: { w: 3.6, d: 0.2, h: 1.5 },
+      single: { w: 1.3, d: 0.15, h: 1.5 },
+      sliding: { w: 4, d: 0.2, h: 1.5 },
+    };
+    const kind = gateKind(f.variant);
+    return html`<label class="fp3d-field fp3d-wide"
+        >${this.t("gate_kind")}
+        <select
+          ?disabled=${!admin}
+          @change=${(e: Event) => {
+            const k = (e.target as HTMLSelectElement).value;
+            const d = KINDS[k];
+            this.updateFurniture({ variant: k === "double" ? null : k, w: d.w, d: d.d, h: d.h });
+          }}
+        >
+          ${Object.keys(KINDS).map((k) => html`<option value=${k} ?selected=${kind === k}>${this.t(`gate_kind_${k}` as I18nKey)}</option>`)}
+        </select></label
+      >
+      <p class="fp3d-sub fp3d-wide">${this.t(`gate_kind_${kind}_hint` as I18nKey)}</p>
+      ${this.entitySelect(this.t("gate_contact"), f.gate_contact ?? null, undefined, this.entityOptions((id) => id.startsWith("binary_sensor.") || id.startsWith("input_boolean.")), (v) => this.updateFurniture({ gate_contact: v === "none" ? null : v }))}
+      ${f.gate_contact && f.gate_contact !== "none"
+        ? html`<label class="fp3d-check fp3d-wide"
+            ><input type="checkbox" .checked=${!!f.gate_contact_invert} ?disabled=${!admin} @change=${(ev: Event) => this.updateFurniture({ gate_contact_invert: (ev.target as HTMLInputElement).checked })} />
+            ${this.t("gate_contact_invert")}</label
+          >`
+        : nothing}
+      ${this.entitySelect(this.t("gate_lock"), f.gate_lock ?? null, undefined, this.entityOptions((id) => id.startsWith("lock.")), (v) => this.updateFurniture({ gate_lock: v === "none" ? null : v }))}
+      ${this.num(this.t("motor_time"), f.awning_time ?? 20, (v) => this.updateFurniture({ awning_time: Math.max(2, Math.min(300, Math.round(v))) }), 1)}
+      ${this.entitySelect(this.t("awning_position"), f.awning_position ?? null, undefined, sensors, (v) => this.updateFurniture({ awning_position: v === "none" ? null : v }))}
+      <label class="fp3d-check fp3d-wide" title=${this.t("awning_invert_hint")}
+        ><input type="checkbox" .checked=${!!f.awning_invert} ?disabled=${!admin} @change=${(ev: Event) => this.updateFurniture({ awning_invert: (ev.target as HTMLInputElement).checked })} />
+        ${this.t("awning_invert")}</label
+      >
+      <p class="fp3d-sub fp3d-wide">${this.t("gate_hint")}</p>`;
+  }
+
   /** A motorised curtain or roll-down screen from a pack (#511): run time, a live position sensor, the other direction. */
   private renderMotionFields(f: Furniture) {
     const admin = this.isAdmin;
@@ -12001,6 +12144,7 @@ export class Fp3dEditor extends LitElement {
       ${ap
         ? this.entitySelect(this.t("ap_clients_sensor"), f.clients ?? null, undefined, sensors, (v) => this.updateFurniture({ clients: v && v !== "none" ? v : null }))
         : html`${this.entitySelect(this.t("heater_temp"), f.water_temp ?? null, undefined, sensors, (v) => this.updateFurniture({ water_temp: v && v !== "none" ? v : null }))}
+            ${this.entitySelect(this.t("heater_fill"), f.water_fill ?? null, undefined, this.entityOptions((id) => /^(sensor|input_number|number)\./.test(id)), (v) => this.updateFurniture({ water_fill: v && v !== "none" ? v : null }))}
             ${this.entitySelect(this.t("furn_power"), typeof f.power === "string" && f.power !== "none" ? f.power : null, undefined, this.entityOptions((id) => this.isPowerSensor(id)), (v) => this.updateFurniture({ power: v && v !== "none" ? v : "none" }))}`}
       <p class="fp3d-sub fp3d-wide">${this.t(ap ? "ap_hint" : "heater_hint")}</p>
       <div class="fp3d-form">${this.markerSelect(f.marker ?? null, (v) => this.updateFurniture({ marker: v }))}${this.iconInput(f.icon, (v) => this.updateFurniture({ icon: v }))}</div>
@@ -12074,6 +12218,15 @@ export class Fp3dEditor extends LitElement {
             /^(media_player|switch|input_boolean|light)\./.test(id) || (packMotion(f.type) === "screen" && id.startsWith("cover."))
           : f.type === "awning"
             ? id.startsWith("cover.")
+            : f.type === "gate"
+            ? // the drive of a gate: a cover, or a switch / helper that opens it
+              /^(cover|switch|input_boolean)\./.test(id)
+            : f.type === "printer_3d"
+            ? // a printer: its print status sensor (Bambu Lab: sensor.<printer>_print_status)
+              id.startsWith("sensor.")
+            : f.type === "fireplace"
+            ? // the fan of a fireplace: a fan, or a switch / helper that runs it
+              /^(fan|switch|input_boolean)\./.test(id)
             : packMotion(f.type) === "curtain"
             ? // a motorised curtain: its motor's cover (or a switch that drives it, #511)
               /^(cover|switch|input_boolean)\./.test(id)
@@ -12098,7 +12251,7 @@ export class Fp3dEditor extends LitElement {
     return html`<div class="fp3d-form fp3d-links">
         ${f.type === "grid_point"
           ? html`<p class="fp3d-sub fp3d-wide">${this.t("grid_point_hint")}</p>`
-          : this.entitySelect(this.t(lamp ? "furn_entity_light" : packMotion(f.type) ? "motor_cover" : tvLike ? "furn_entity_tv" : f.type === "awning" ? "awning_cover" : f.type === "radiator" || f.type === "ac_unit" ? "furn_entity_climate" : isRobotVacuum(f.type) ? "furn_entity_vacuum" : "furn_entity"), f.entity ?? null, autoPick("entity"), entities, (v) =>
+          : this.entitySelect(this.t(lamp ? "furn_entity_light" : packMotion(f.type) ? "motor_cover" : tvLike ? "furn_entity_tv" : f.type === "awning" ? "awning_cover" : f.type === "gate" ? "gate_cover" : f.type === "fireplace" ? "fireplace_fan" : f.type === "printer_3d" ? "printer_status" : f.type === "radiator" || f.type === "ac_unit" ? "furn_entity_climate" : isRobotVacuum(f.type) ? "furn_entity_vacuum" : "furn_entity"), f.entity ?? null, autoPick("entity"), entities, (v) =>
               this.updateFurniture({ entity: v }),
             )}
         ${f.type === "lamp_fan"
@@ -12109,8 +12262,8 @@ export class Fp3dEditor extends LitElement {
           ? html`${this.entitySelect(this.t("heat_sensor"), f.heat_sensor ?? null, undefined, this.entityOptions((id) => /^(binary_sensor|sensor|switch|input_boolean|number)\./.test(id)), (v) => this.updateFurniture({ heat_sensor: v && v !== "none" ? v : null }))}
               <p class="fp3d-sub fp3d-wide">${this.t("heat_sensor_hint")}</p>`
           : nothing}
-        ${f.type === "awning" ? this.renderAwningFields(f) : packMotion(f.type) ? this.renderMotionFields(f) : nothing}
-        ${!lamp && !(ENERGY_DEVICES as readonly string[]).includes(f.type) && !hasScreen(f.type) ? this.renderStateLinks(f) : nothing}
+        ${f.type === "awning" ? this.renderAwningFields(f) : f.type === "gate" ? this.renderGateFields(f) : f.type === "fireplace" ? this.renderFireplaceFields(f) : f.type === "printer_3d" ? this.renderPrinterFields(f) : packMotion(f.type) ? this.renderMotionFields(f) : nothing}
+        ${!lamp && f.type !== "gate" && f.type !== "fireplace" && f.type !== "printer_3d" && !(ENERGY_DEVICES as readonly string[]).includes(f.type) && !hasScreen(f.type) ? this.renderStateLinks(f) : nothing}
         ${lamp && f.entity && f.entity !== "none"
           ? html`${this.entitySelect(this.t("furn_color_entity"), f.color_entity ?? null, undefined, this.entityOptions((id) => id.startsWith("light.") && id !== f.entity), (v) => this.updateFurniture({ color_entity: v === "none" ? null : v }))}
               <p class="fp3d-sub fp3d-wide">${this.t("furn_color_entity_hint")}</p>`

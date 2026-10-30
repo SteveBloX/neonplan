@@ -27,6 +27,11 @@ const DEFAULTS: Partial<CardConfig> = {
   controls: false,
   fullscreen_button: false,
   room_names: true,
+  room_values: "all",
+  solar_total: false,
+  plan_view: false,
+  plan_angle: 0,
+  plan_rotation: 0,
   floor_stack: "dim",
   alerts: true,
   alert_jump: false,
@@ -111,12 +116,23 @@ export class Floorplan3dCardEditor extends LitElement {
     </label>`;
   }
 
-  private toggle(key: "explode" | "roof_fade" | "roof" | "camera_wall" | "energy" | "room_panel" | "stats" | "fullscreen_button" | "room_names" | "alerts" | "alert_jump" | "director" | "voice" | "scenes" | "idle_orbit" | "motion_trail" | "time_travel" | "household_card" | "weather", label: I18nKey, hint?: I18nKey) {
+  private toggle(key: "explode" | "roof_fade" | "roof" | "camera_wall" | "energy" | "room_panel" | "stats" | "fullscreen_button" | "room_names" | "solar_total" | "plan_view" | "alerts" | "alert_jump" | "director" | "voice" | "scenes" | "idle_orbit" | "motion_trail" | "time_travel" | "household_card" | "weather", label: I18nKey, hint?: I18nKey) {
     const on = this.value[key];
     return html`<label class="toggle">
       <input type="checkbox" .checked=${on} @change=${(e: Event) => this.set(key, (e.target as HTMLInputElement).checked)} />
       <span>${this.t(label)}${hint ? html`<small>${this.t(hint)}</small>` : nothing}</span>
     </label>`;
+  }
+
+  /** The plan view: from above without the roof, with its angle and turn. */
+  private renderPlanView() {
+    const v = this.value;
+    const slider = (key: "plan_angle" | "plan_rotation", label: I18nKey, max: number) => html`<label class="field"
+      >${this.t(label)}: <b>${v[key]}°</b>
+      <input type="range" min="0" max=${max} step="1" .value=${String(v[key])} @input=${(e: Event) => this.set(key, Number((e.target as HTMLInputElement).value) || undefined)} />
+    </label>`;
+    return html`${this.toggle("plan_view", "card_plan_view", "card_plan_view_hint")}
+      ${v.plan_view ? html`<div class="sub">${slider("plan_angle", "card_plan_angle", 70)} ${slider("plan_rotation", "card_plan_rotation", 359)}</div>` : nothing}`;
   }
 
   /** Floor pictures: on by default without a start floor, off with one (but can be switched on). */
@@ -328,6 +344,7 @@ export class Floorplan3dCardEditor extends LitElement {
           ${this._config.accent ? html`<button type="button" class="link" @click=${() => this.set("accent", undefined)}>${this.t("accent_reset")}</button>` : nothing}
         </label>
         ${this.select("walls", "card_walls", [["auto", "walls_auto"], ["cut", "walls_cut"]], v.walls)}
+      ${this.select("room_values", "card_room_values", [["all", "card_room_values_all"], ["temperature", "card_room_values_temp"]], v.room_values)}
         ${this.select("quality", "quality", [["auto", "quality_auto"], ["low", "quality_low"], ["high", "quality_high"]], v.quality)}
         ${this.select("floor_stack", "card_floor_stack", [["dim", "floor_stack_dim"], ["stacked", "floor_stack_stacked"], ["single", "floor_stack_single"]], v.floor_stack)}
       </div>
@@ -366,6 +383,8 @@ export class Floorplan3dCardEditor extends LitElement {
       ${this.renderThumbsToggle()} ${this.toggle("room_names", "card_room_names")}
       ${this.toggle("energy", "card_energy")} ${this.toggle("room_panel", "card_room_panel", "card_room_panel_hint")}
       ${this.toggle("fullscreen_button", "card_fullscreen_button", "card_fullscreen_button_hint")}
+      ${this.toggle("solar_total", "card_solar_total", "card_solar_total_hint")}
+      ${this.renderPlanView()}
       ${this.toggle("explode", "card_explode")} ${this.toggle("roof", "card_roof", "card_roof_hint")} ${this.toggle("roof_fade", "card_roof_fade", "card_roof_fade_hint")} ${this.toggle("stats", "card_stats", "card_stats_hint")}
       ${this.renderFeatures()}
       ${this.renderKiosk()}

@@ -15,7 +15,7 @@ import { carState, type CarState, heatSensorOn, roomClimateValue,
   openingState,
   TOGGLE_KINDS,
   type FurnitureLinks,
-  type OpeningEntities, awningStates, confirmEntities, fridgeDoors, hasScreen, pictureRuleMatches,
+  type OpeningEntities, awningStates, fireStates, confirmEntities, fridgeDoors, hasScreen, pictureRuleMatches,
   fromCelsius,
   tempUnit,
   robotRoom,
@@ -38,8 +38,10 @@ import { carState, type CarState, heatSensorOn, roomClimateValue,
 import { alertColor, alertEntities, alertSources, alertText, findAlerts, isOutage, type Alert, type AlertSources } from "../alerts.ts";
 import { iconPath, iconSvg, mdiIcon } from "../icons.ts";
 import { applianceIdle, binColors, binDue, binNext, binOut, binOutToggleable, binTagsShown, doorsOf, fetchPickups, FinishedMemory, fridgeOpenTooLong, groupTags, hassCountry, isFinishedState, mailboxPost, nextFridgeCheck, plantThirsty, remainingMinutes, remainingText, servicesDue, setHouseholdCountry, wasteCalendars, isPackPlant, type HouseholdItem, type HouseholdTag, type Pickup } from "../household.ts";
-import { deviceSensors, energySummary, fetchSolarRows, fetchTodayChange, fieldLevels, fieldPowers, findConsumers, flowColor, flowSegments, gridPoint, powerSensorFor, readPower, solarCurvePath, solarDayFromStats, type Consumer, type EnergySummary, type StatRow } from "../energy.ts";
-import { fieldFace, fieldSize, roofFaces, roofWindowRoom } from "../solar.ts";
+import { deviceSensors, energySummary, fetchSolarRows, fetchTodayChange, fieldLevels, fieldNow, fieldPowers, findConsumers, modulePowers, moduleFills, MODULE_PEAK_W, flowColor, flowSegments, gridPoint, powerSensorFor, readPower, solarCurvePath, solarDayFromStats, type Consumer, type EnergySummary, type StatRow } from "../energy.ts";
+import { spaPieces, spaState } from "../spa.ts";
+import { printerState, printerStates } from "../printer.ts";
+import { fieldCells, fieldFace, fieldModules, fieldSize, roofFaces, roofWindowRoom } from "../solar.ts";
 import { type CustomButton, type EntityRef, DEFAULT_HOLOGRAM, lockAlong, type PoolPipe, type RoofWindow, type SolarField, uid } from "../model.ts";
 
 /** A hologram card: the house's balance on the main plant, one plant (a balcony plant) on its own, or a device. */
@@ -60,7 +62,9 @@ function waterText(hass: HomeAssistant, v: number, unit: string): string {
 }
 
 interface HoloCard {
-  kind: "main" | "plant" | "device" | "media" | "car" | "module" | "bin";
+  kind: "main" | "plant" | "device" | "media" | "car" | "module" | "bin" | "solar";
+  /** A solar field's info card, or – with a cell – the card of a tapped module. Free for everyone. */
+  solar?: { fieldId: string; cell: string | null; w: number; peak: number; modules: number; own: boolean; sensor: string | null; field: string };
   /**
    * Haushalt Pro: the tag of a waste bin that goes out – its colour and when ("Tomorrow") – or of bins standing
    * together (one line each, in pickup order), a mailbox with post or a thirsty plant (a round symbol from afar).
@@ -278,6 +282,7 @@ export class Fp3dView3d extends LitElement {
     _wallboxW: { state: true },
     _plants: { state: true },
     _holoOn: { state: true },
+    _solarPick: { state: true },
     _flows: { state: true },
     _holoShow: { state: true },
     _swipe: { state: true },
@@ -313,6 +318,9 @@ export class Fp3dView3d extends LitElement {
     alertJump: { attribute: false },
     director: { attribute: false },
     hideRoof: { attribute: false },
+    planView: { attribute: false },
+    valuesTemp: { attribute: false },
+    solarTotal: { attribute: false },
     voice: { attribute: false },
     screen: { attribute: false },
     _voice: { state: true },
@@ -329,6 +337,7 @@ export class Fp3dView3d extends LitElement {
     _hhFolded: { state: true },
     _binInfo: { state: true },
     _gangMenu: { state: true },
+    _spaMenu: { state: true },
     householdCard: { attribute: false },
     _sceneFired: { state: true },
     replay: { attribute: false },
@@ -434,6 +443,8 @@ export class Fp3dView3d extends LitElement {
   private declare _plants: { name: string; w: number }[];
   /** The hologram is on screen (then the energy bar keeps only its switch). */
   private declare _holoOn: boolean;
+  /** The solar module whose card is open (a tap on it; a tap anywhere else closes it). */
+  private declare _solarPick: { fieldId: string; cell: string } | null;
   private holoTimer: ReturnType<typeof setInterval> | undefined;
   /** Which hologram cards are folded to their big number. */
   private holoFolded = new Set<number>();
@@ -506,6 +517,12 @@ export class Fp3dView3d extends LitElement {
   declare director: boolean;
   /** The roof left out altogether (card option `roof: false`). */
   declare hideRoof: boolean;
+  /** The plan view (dashboard card): the camera's turn and tilt from straight above, or null. */
+  declare planView: { theta: number; phi: number } | null;
+  /** The "values" mode shows only the temperature, not humidity and CO₂. */
+  declare valuesTemp: boolean;
+  /** Only the whole plant's solar power on the roof, not a card per field. */
+  declare solarTotal: boolean;
   /** Voice control: a microphone button – "Zeig das Wohnzimmer" shows it, other sentences go to Assist (default off). */
   declare voice: boolean;
   /** This view's screen name: a sentence from Assist that names a screen is only for the view with that name. */
@@ -525,6 +542,8 @@ export class Fp3dView3d extends LitElement {
   private declare _binInfo: { furnitureId: string; x: number; y: number } | null;
   /** A wall switch or socket with several gangs: its small menu (one button per gang). */
   private declare _gangMenu: { furnitureId: string; x: number; y: number } | null;
+  /** The controls of a spa (a tap on its water or its pump unit). */
+  private declare _spaMenu: { areaId: string; x: number; y: number } | null;
   private binInfoTimer: ReturnType<typeof setTimeout> | undefined;
   /** The glass card "Today in the household" (Haushalt Pro; the dashboard card can switch it off). */
   declare householdCard: boolean;
@@ -697,6 +716,7 @@ export class Fp3dView3d extends LitElement {
     this._wallboxW = null;
     this._plants = [];
     this._holoOn = false;
+    this._solarPick = null;
     this._swipe = null;
     this._menu = null;
     this._through = null;
@@ -736,6 +756,9 @@ export class Fp3dView3d extends LitElement {
     this.alertJump = false;
     this.director = false;
     this.hideRoof = false;
+    this.planView = null;
+    this.valuesTemp = false;
+    this.solarTotal = false;
     this.voice = false;
     this.screen = null;
     this._voice = null;
@@ -745,6 +768,7 @@ export class Fp3dView3d extends LitElement {
     this._hhFolded = readFlag("neonplan3d.hhFolded");
     this._binInfo = null;
     this._gangMenu = null;
+    this._spaMenu = null;
     this.householdCard = true;
     this.scenes = true;
     this._sceneFired = null;
@@ -865,12 +889,13 @@ export class Fp3dView3d extends LitElement {
     const touched = () => this.directing.touch(Date.now());
     this.addEventListener("pointerdown", touched, { passive: true });
     this.addEventListener("wheel", touched, { passive: true });
-    // the mouse wheel over a hologram card zooms the view like anywhere else on the stage (#239)
+    // the mouse wheel over a hologram card, a room name or a device's symbol zooms the view like anywhere else on the stage
+    // (#239); the lists and panels that scroll themselves keep their wheel
     this.renderRoot.addEventListener(
       "wheel",
       (e) => {
         const ev = e as WheelEvent;
-        if (!(ev.target as Element | null)?.closest?.(".fp3d-holo")) return;
+        if (!(ev.target as Element | null)?.closest?.(".fp3d-holo, .fp3d-labels, .fp3d-pin, .fp3d-dev")) return;
         const canvas = this.renderRoot.querySelector("canvas");
         if (!canvas) return;
         ev.preventDefault();
@@ -914,8 +939,14 @@ export class Fp3dView3d extends LitElement {
         explode: this.explode,
         safeFx: gpuSafeMode(GUARD_VERSION),
         onContextLost: () => noteContextLost(GUARD_VERSION, startedAt, Date.now(), document.hidden),
-        onRoomTap: (floorId, roomId) => this.fire("room-tap", { floorId, roomId }),
+        onRoomTap: (floorId, roomId) => {
+          this._spaMenu = null;
+          this.closeSolarCard();
+          this.fire("room-tap", { floorId, roomId });
+        },
         onFloorTap: (floorId) => this.fire("floor-tap", { floorId }),
+        onSolarTap: (fieldId, cell) => this.onSolarTap(fieldId, cell),
+        onSpaTap: (areaId, x, y) => this.onSpaTap(areaId, x, y),
         floorInfo: (floor) =>
           floor.rooms.length === 1 ? translate(this.hass, "floor_rooms_one") : translate(this.hass, "floor_rooms", { n: floor.rooms.length }),
         onBack: () => this.fire("back", {}),
@@ -948,6 +979,7 @@ export class Fp3dView3d extends LitElement {
       this.viewer.setAutoOrbit(this.autoOrbit ? 0.06 : 0);
       this.viewer.setKeepRoof(this.keepRoof);
       this.viewer.setHideRoof(this.hideRoof);
+      this.viewer.setPlanView(this.planView);
       this._low = this.viewer.low;
       this.viewer.setPacks([...getPacks()]);
       if (this.hass) void syncModules(this.hass, getPacks()).then(() => this.syncDevices(true));
@@ -1036,6 +1068,9 @@ export class Fp3dView3d extends LitElement {
     if (changed.has("explode")) v.setExplode(this.explode);
     if (changed.has("keepRoof")) v.setKeepRoof(this.keepRoof);
     if (changed.has("hideRoof")) v.setHideRoof(this.hideRoof);
+    if (changed.has("planView")) v.setPlanView(this.planView);
+    if (changed.has("valuesTemp")) this.applyTint();
+    if (changed.has("solarTotal")) this.syncDevices(true);
     if (changed.has("floorStack")) v.setFloorStack(this.floorStack);
     if (changed.has("theme")) v.setTheme(this.effectiveTheme());
     if (changed.has("accent")) v.setAccent(this.accent ?? null);
@@ -1188,6 +1223,12 @@ export class Fp3dView3d extends LitElement {
     v.setScreens(furniture.screens);
     v.setFridgeDoors(fridgeDoors(hass, b.floors));
     v.setAwnings(awningStates(hass, b.floors));
+    // a built-in fireplace burns while its fan entity is on
+    v.setFires(fireStates(hass, b.floors, this.furnitureLinks));
+    // pools that are spas: water colour by temperature, bubbles, jets, heating, filter and disinfection
+    v.setSpas(spaPieces(hass, b));
+    // 3D printers: the head moves and the part grows while one prints
+    v.setPrinters(printerStates(hass, b.floors, this.furnitureLinks));
     v.setProjections(this.projectedCameras(hass, b));
     v.setRobots(this.robotInfos(hass, b));
     // roof windows: sash and blind follow their contact and cover like windows do
@@ -1235,7 +1276,7 @@ export class Fp3dView3d extends LitElement {
       const floorId = face.wall?.floorId ?? (face.unbounded ? (b.floors.find((f) => f.elevation === Math.min(...b.floors.map((x) => x.elevation)))?.id ?? b.floors[0].id) : [...b.floors].sort((p, q) => q.elevation - p.elevation)[0].id);
       return { p: [c[0] + face.n[0] * 0.05, c[1] + face.n[1] * 0.05, c[2] + face.n[2] * 0.05] as [number, number, number], n: [face.n[0], face.n[1], face.n[2]] as [number, number, number], floorId, size, roof: true, views: plantViews };
     };
-    const anchors: { p: [number, number, number]; n: [number, number, number]; floorId: string; size: number; roof: boolean; views: "house" | "all" | "floor"; room?: string | null; near?: number }[] = [];
+    const anchors: { p: [number, number, number]; n: [number, number, number]; floorId: string; size: number; roof: boolean; views: "house" | "all" | "floor"; room?: string | null; near?: number; withRoof?: boolean }[] = [];
     const cards: HoloCard[] = [];
     const anyEnergy = summary.grid !== null || summary.battery !== null || summary.solar !== null;
     const free = holo.place === "free" && Number.isFinite(holo.x) && Number.isFinite(holo.z);
@@ -1430,6 +1471,59 @@ export class Fp3dView3d extends LitElement {
       for (const floor of b.floors) for (const pl of floor.placements) add(floor, pl.entity_id, pl.x, pl.z, pl.y ?? 1.1, pl.name || entityName(hass, pl.entity_id));
       for (const floor of b.floors) furn(floor, false);
     }
+    // free for everyone: an info card on every solar field while the roof is shown, and one on the module that was tapped
+    {
+      const solarW = fieldPowers(hass, b, summary.solar);
+      const all = b.settings.roof.solar ?? [];
+      const floorOf = (face: NonNullable<ReturnType<typeof fieldFace>>) =>
+        face.wall?.floorId ?? (face.unbounded ? (b.floors.find((fl) => fl.elevation === Math.min(...b.floors.map((x) => x.elevation)))?.id ?? b.floors[0].id) : [...b.floors].sort((p, q) => q.elevation - p.elevation)[0].id);
+      const fieldCards: { anchor: NonNullable<ReturnType<typeof anchorOn>> & { withRoof: boolean }; card: HoloCard }[] = [];
+      for (const f of fields) {
+        const face = fieldFace(b, f);
+        if (!face) continue;
+        const stringEntity = f.string ? strings.find((x) => x.id === f.string)?.entity : null;
+        // without any reading a card would only say 0 W
+        if (!(f.entity && f.entity !== "none") && !f.module_entities && !(stringEntity && stringEntity !== "none") && summary.solar === null) continue;
+        const anchor = anchorOn(f, 0, 0, 1);
+        if (!anchor) continue;
+        const index = all.findIndex((x) => x.id === f.id) + 1;
+        const n = fieldCells(f).length;
+        fieldCards.push({
+          anchor: { ...anchor, views: "house", withRoof: !face.wall && !face.unbounded },
+          card: { kind: "solar", name: f.name || `${translate(hass, "solar_field")} ${index}`, w: null, dayIds: [], battery: null, solar: { fieldId: f.id, cell: null, w: fieldNow(hass, f, solarW.get(f.id) ?? 0), peak: n * (f.wp ?? MODULE_PEAK_W), modules: n, own: false, sensor: null, field: "" } },
+        });
+      }
+      if (this.solarTotal && fieldCards.length) {
+        // only the whole plant: one card with the sum of the fields, on the biggest one
+        const sum = fieldCards.reduce((s, c) => ({ w: s.w + c.card.solar!.w, peak: s.peak + c.card.solar!.peak, modules: s.modules + c.card.solar!.modules }), { w: 0, peak: 0, modules: 0 });
+        anchors.push(fieldCards[0].anchor);
+        cards.push({ kind: "solar", name: translate(hass, "solar_total_title"), w: null, dayIds: [], battery: null, solar: { fieldId: "*", cell: null, ...sum, own: false, sensor: null, field: "" } });
+      } else {
+        for (const c of fieldCards) {
+          anchors.push(c.anchor);
+          cards.push(c.card);
+        }
+      }
+      const pick = this._solarPick;
+      const pf = pick ? fields.find((x) => x.id === pick.fieldId) : undefined;
+      const pface = pf ? fieldFace(b, pf) : null;
+      const pmod = pf && pface && pick ? fieldModules(pface, pf).find((m) => m.cell === pick.cell) : undefined;
+      if (pf && pface && pmod && pick) {
+        const mp = modulePowers(hass, pf, solarW.get(pf.id) ?? 0).get(pick.cell);
+        const c = [0, 1, 2].map((k) => pmod.corners.reduce((sum, q) => sum + q[k], 0) / 4);
+        const [row, col] = pick.cell.split(":").map(Number);
+        anchors.push({ p: [c[0] + pface.n[0] * 0.1, c[1] + pface.n[1] * 0.1, c[2] + pface.n[2] * 0.1], n: [pface.n[0], pface.n[1], pface.n[2]], floorId: floorOf(pface), size: 1, roof: true, views: "house", withRoof: !pface.wall && !pface.unbounded });
+        const idx = all.findIndex((x) => x.id === pf.id) + 1;
+        cards.push({
+          kind: "solar",
+          name: translate(hass, "solar_card_module", { row: row + 1, col: col + 1 }),
+          w: null,
+          dayIds: [],
+          battery: null,
+          solar: { fieldId: pf.id, cell: pick.cell, w: mp?.w ?? 0, peak: pf.wp ?? MODULE_PEAK_W, modules: 1, own: !!mp?.own, sensor: mp?.sensor ?? null, field: pf.name || `${translate(hass, "solar_field")} ${idx}` },
+        });
+      }
+    }
     // Auto Pro: a glass card over the car in its spot, in the same look as the energy and music cards
     if (hasFeature("auto_pro")) {
       const holoSize = (b.settings.roof.hologram ?? DEFAULT_HOLOGRAM).size;
@@ -1525,6 +1619,10 @@ export class Fp3dView3d extends LitElement {
     if (JSON.stringify(shownCards) !== JSON.stringify(this._holos)) this._holos = shownCards;
     // the modules live with their production (at night, and without Pro, they rest)
     v.setSolarLevels(powers && !this.dimmed ? fieldLevels(b, powers) : new Map());
+    // the fill look of the modules works without Pro: every module shows its share of its peak
+    v.setSolarFill(this.dimmed ? new Map() : moduleFills(hass, b, fieldPowers(hass, b, summary.solar)));
+    // a tapped module whose field is gone closes its card
+    if (this._solarPick && !fields.some((x) => x.id === this._solarPick!.fieldId)) this._solarPick = null;
     // the energy cables (Energie Pro) and the pool's pipes share the viewer's flow layer
     const energyFlows =
       !pro || !(this.flows ?? this._flows) || this.dimmed
@@ -1982,7 +2080,9 @@ export class Fp3dView3d extends LitElement {
       if (link && !link.hasAttribute("hidden")) link.toggleAttribute("hidden", true);
       return;
     }
-    const s = scale * 0.8;
+    // a solar card follows the zoom but keeps a readable size: never smaller than 0.9 (small type from afar), never huge up close
+    const s = card?.kind === "solar" ? Math.min(1.3, Math.max(0.9, scale * 0.8 * 1.25)) : scale * 0.8;
+    if (card?.kind === "solar") return this.placeSolarCard(el, link, index, x, y, s);
     const dx = 34 * s;
     const dy = 46 * s;
     // the card's lower left corner (lower right seen from behind) sits up and to the side of the anchor
@@ -2025,6 +2125,43 @@ export class Fp3dView3d extends LitElement {
   }
 
   /**
+   * A solar card: beside its anchor – to the right, or to the left where the right side would leave the stage – never
+   * mirrored (its type must stay readable), and above any card placed before it.
+   */
+  private placeSolarCard(el: HTMLElement, link: SVGSVGElement | null, index: number, x: number, y: number, s: number): void {
+    let size = this.holoSizes.get(index);
+    const now = performance.now();
+    if (!size || now - size.at > 2000) {
+      size = { w: el.offsetWidth || 200, h: el.offsetHeight || 100, at: now };
+      this.holoSizes.set(index, size);
+    }
+    const w = size.w * s;
+    const h = size.h * s;
+    const stageW = this.renderRoot.querySelector<HTMLElement>(".fp3d-stage")?.clientWidth ?? 1000;
+    const dx = 30 * s;
+    const right = x + dx + w <= stageW - 6 || x - dx - w < 6;
+    const x0 = right ? x + dx : x - dx - w;
+    let cy = Math.max(h + 6, y - 40 * s);
+    for (let pass = 0; pass < 6; pass++) {
+      const hit = this.holoBoxes.find((b) => x0 < b.x1 + 4 && x0 + w > b.x0 - 4 && cy - h < b.y1 + 4 && cy > b.y0 - 4);
+      if (!hit) break;
+      cy = hit.y0 - 6;
+    }
+    this.holoBoxes.push({ i: index, x0, x1: x0 + w, y0: cy - h, y1: cy });
+    el.style.transform = `translate(${x0.toFixed(1)}px, ${cy.toFixed(1)}px) scale(${s.toFixed(3)}) translate(0, -100%)`;
+    if (link) {
+      const line = link.firstElementChild as SVGLineElement | null;
+      const dot = link.lastElementChild as SVGCircleElement | null;
+      line?.setAttribute("x1", x.toFixed(1));
+      line?.setAttribute("y1", y.toFixed(1));
+      line?.setAttribute("x2", (right ? x0 : x0 + w).toFixed(1));
+      line?.setAttribute("y2", cy.toFixed(1));
+      dot?.setAttribute("cx", x.toFixed(1));
+      dot?.setAttribute("cy", y.toFixed(1));
+    }
+  }
+
+  /**
    * Energie Pro: the glass holograms – the house's balance on the main field and one card per further
    * plant (house view), and the device cards (house and floor view). The viewer hides every card whose
    * anchor is not in view, so every card renders, in the anchors' order.
@@ -2034,13 +2171,38 @@ export class Fp3dView3d extends LitElement {
     // Haushalt Pro's tags (bins, post, a thirsty plant) are no energy holograms: they show on their own
     const tagsOnly = () => this._holos.map((card, i) => (card.kind === "bin" ? this.renderBinCard(card, i) : nothing));
     // a module with a card or a label of its own needs no Pro add-on for them
-    const fromModule = this._holos.some((c) => c.kind === "module" || c.tag);
+    const fromModule = this._holos.some((c) => c.kind === "module" || c.kind === "solar" || c.tag);
     // the editor keeps the energy bar off but asks for the holograms in its energy tool
     if (!(fromModule || hasFeature("energy_pro") || hasFeature("sound") || hasFeature("auto_pro") || hasFeature("pool") || hasFeature("household")) || (this.roomId && !(this.building?.settings.roof.hologram ?? DEFAULT_HOLOGRAM).device_room) || !(this.showEnergy || this.holograms) || !this.holoVisible()) return hasFeature("household") || fromModule ? tagsOnly() : nothing;
     // the plants' cards belong to the house view – with a single floor that floor is the house view (#255)
     const house = this.floorId === null || (this.building?.floors.length ?? 0) <= 1;
     const plants = !!e && (e.solar !== null || e.grid !== null || e.battery !== null) && house;
-    return this._holos.map((card, i) => (card.kind === "module" ? this.renderModuleCard(card, i) : card.kind === "bin" ? this.renderBinCard(card, i) : card.kind === "car" ? this.renderCarCard(card, i) : card.kind === "media" ? this.renderMediaCard(card, i) : card.kind === "device" ? this.renderDeviceCard(card, i) : plants ? this.renderHoloCard(card, i, e!) : nothing));
+    return this._holos.map((card, i) => (card.kind === "solar" ? this.renderSolarCard(card, i) : card.kind === "module" ? this.renderModuleCard(card, i) : card.kind === "bin" ? this.renderBinCard(card, i) : card.kind === "car" ? this.renderCarCard(card, i) : card.kind === "media" ? this.renderMediaCard(card, i) : card.kind === "device" ? this.renderDeviceCard(card, i) : plants ? this.renderHoloCard(card, i, e!) : nothing));
+  }
+
+  /**
+   * A solar field's card (free): its power now as a share of its peak, with a bar; or – after a tap on a module –
+   * that module's own card. A dark plate with large type, so it stays readable over the roof from afar.
+   */
+  private renderSolarCard(card: HoloCard, index: number) {
+    const s = card.solar!;
+    const hass = this.hass;
+    const t = (k: Parameters<typeof translate>[1], vars: Record<string, string | number> = {}) => translate(hass, k, vars);
+    const pct = s.peak > 0 ? Math.round((s.w / s.peak) * 100) : 0;
+    const one = s.cell !== null;
+    return html`<svg class="fp3d-holo-link" data-holo=${index} hidden aria-hidden="true"><line x1="0" y1="0" x2="0" y2="0" /><circle cx="0" cy="0" r="3" /></svg>
+      <div class="fp3d-holo fp3d-holo-solar ${one ? "fp3d-holo-solar-one" : ""}" data-holo=${index} hidden role="group" aria-label=${card.name}>
+        <div class="fp3d-holo-head">
+          <span>☀ ${card.name}</span>
+          ${one ? html`<button class="fp3d-holo-x" aria-label=${t("solar_card_close")} title=${t("solar_card_close")} @click=${(e: Event) => (e.stopPropagation(), this.closeSolarCard())}>×</button>` : nothing}
+        </div>
+        ${one ? html`<div class="fp3d-holo-solar-sub">${s.field}</div>` : nothing}
+        <div class="fp3d-holo-solar-big"><b>${formatPower(hass, s.w)}</b><span>${t("solar_card_pct", { pct })}</span></div>
+        <div class="fp3d-holo-bar"><div style="width:${Math.max(0, Math.min(100, pct))}%"></div></div>
+        <div class="fp3d-holo-solar-sub">
+          ${t("solar_card_peak", { peak: formatPower(hass, s.peak) })}${one ? ` · ${s.own ? t("solar_card_sensor") : t("solar_card_share")}` : ` · ${t("solar_card_modules", { n: s.modules })}`}
+        </div>
+      </div>`;
   }
 
   /** Haushalt Pro: a waste bin's small hologram – when it goes out, in the bin's colour. */
@@ -2628,7 +2790,7 @@ export class Fp3dView3d extends LitElement {
           const t = roomClimateValue(hass, floor, room, "temperature");
           const h = roomClimateValue(hass, floor, room, "humidity");
           const c = roomClimateValue(hass, floor, room, "co2");
-          const parts = [
+          const parts = this.valuesTemp ? [t !== null ? `${formatNumber(hass, fromCelsius(hass, t), 1)} ${tempUnit(hass)}` : null].filter((x): x is string => !!x) : [
             t !== null ? `${formatNumber(hass, fromCelsius(hass, t), 1)} ${tempUnit(hass)}` : null,
             h !== null ? `${formatNumber(hass, h, 0)} %` : null,
             c !== null ? `${formatNumber(hass, c, 0)} ppm` : null,
@@ -2716,6 +2878,14 @@ export class Fp3dView3d extends LitElement {
               show: f.marker ?? "always",
               fromFurniture: true,
             });
+          }
+          continue;
+        }
+        if (f.type === "printer_3d") {
+          const pin = this.printerItem(hass, floor, f, taken);
+          if (pin) {
+            markers.push(pin);
+            targets.set(f.id, pin.id);
           }
           continue;
         }
@@ -3141,12 +3311,20 @@ export class Fp3dView3d extends LitElement {
     const runW = typeof f.run_w === "number" && f.run_w > 0 ? f.run_w : 30;
     const heating = (st?.attributes.hvac_action === "heating") || (kind === "switch" && st?.state === "on") || (watts ?? 0) > runW;
     const on = heating || (!!st && !["off", "unavailable", "unknown"].includes(st.state));
-    if (on) screens.set(f.id, { color: [1, 0.45, 0.15], level: heating ? 0.9 : 0.3, faces: [{ part: "band", color: [1, 0.45, 0.15], level: heating ? 0.9 : 0.3 }] });
+    // how full the tank is: its water shows in 3D, from the foot up to the level the sensor reports
+    const fillId = ref(f.water_fill);
+    const fs = fillId ? hass.states[fillId] : undefined;
+    const fillRaw = fs && !isUnavailable(fs) ? Number(fs.state) : Number.NaN;
+    const fill = Number.isFinite(fillRaw) ? Math.min(1, Math.max(0, fs!.attributes.unit_of_measurement === "%" || fillRaw > 1 ? fillRaw / 100 : fillRaw)) : null;
+    const faces: NonNullable<ScreenState["faces"]> = [];
+    if (on) faces.push({ part: "band", color: [1, 0.45, 0.15], level: heating ? 0.9 : 0.3 });
+    if (fill !== null) faces.push({ part: "fill", color: [0.25, 0.7, 1], level: 0.8, fraction: fill });
+    if (faces.length) screens.set(f.id, { color: [1, 0.45, 0.15], level: heating ? 0.9 : 0.3, faces });
     const tempId = ref(f.water_temp);
     const ts = tempId ? hass.states[tempId] : undefined;
     const temp = ts && Number.isFinite(Number(ts.state)) ? Number(ts.state) : typeof st?.attributes.current_temperature === "number" ? (st.attributes.current_temperature as number) : null;
     const unit = (ts?.attributes.unit_of_measurement as string | undefined) ?? "°C";
-    const id = main ?? tempId ?? pw;
+    const id = main ?? tempId ?? fillId ?? pw;
     if (!id || taken.has(id)) return null;
     taken.add(id);
     return {
@@ -3155,13 +3333,13 @@ export class Fp3dView3d extends LitElement {
       y: mountBase(floor, f) + f.h + 0.25,
       icon: mdiIcon(f.icon || "water-boiler"),
       name: f.name || (main ? entityName(hass, main) : furnitureName(hass, f.type)),
-      text: temp !== null ? `${formatNumber(hass, Math.round(temp))} ${unit}${heating ? " · 🔥" : ""}` : st ? stateText(hass, st) : "",
+      text: (temp !== null ? `${formatNumber(hass, Math.round(temp))} ${unit}${heating ? " · 🔥" : ""}` : st ? stateText(hass, st) : "") + (fill !== null ? `${temp !== null || st ? " · " : ""}${Math.round(fill * 100)} %` : ""),
       active: heating,
       unavailable: st ? isUnavailable(st) : false,
       power: watts ?? undefined,
       show: f.marker ?? undefined,
-      // its temperature is worth a pin
-      energyDevice: temp !== null,
+      // its temperature (or its filling) is worth a pin
+      energyDevice: temp !== null || fill !== null,
     };
   }
 
@@ -3177,6 +3355,45 @@ export class Fp3dView3d extends LitElement {
   }
 
   private wallCache = new WeakMap<Floor, Wall[]>();
+
+  /** A 3D printer's pin: its print status as words, with the progress and the time left while it prints. */
+  private printerItem(hass: HomeAssistant, floor: Floor, f: Furniture, taken: Set<string>): (DeviceMarker & { fromFurniture: boolean; energyDevice?: boolean }) | null {
+    const own = this.furnitureLinks.get(f.id)?.entity ?? null;
+    const status = typeof own === "string" && own !== "none" ? own : null;
+    if (!status || taken.has(status)) return null;
+    taken.add(status);
+    const s = printerState(hass, f, status);
+    const pct = s.progress !== null ? `${Math.round(s.progress * 100)} %` : "";
+    const left = s.remaining !== null ? remainingText(s.remaining) : "";
+    const text =
+      s.phase === "printing"
+        ? [pct || translate(hass, "printer_printing"), left].filter(Boolean).join(" · ")
+        : s.phase === "paused"
+          ? [translate(hass, "printer_paused"), pct].filter(Boolean).join(" · ")
+          : translate(hass, `printer_${s.phase}` as I18nKey);
+    const room = floor.rooms.find((r) => r.points.length >= 3 && pointInPolygon([f.x, f.z], r.points));
+    const busy = s.phase === "printing" || s.phase === "paused";
+    return {
+      id: status,
+      floorId: floor.id,
+      roomId: room?.id ?? null,
+      x: f.x,
+      z: f.z,
+      y: mountBase(floor, f) + f.h + 0.2,
+      icon: mdiIcon(f.icon || "printer-3d"),
+      name: f.name || furnitureName(hass, f.type),
+      text,
+      active: busy,
+      unavailable: s.phase === "offline",
+      glow: null,
+      ownName: f.name || undefined,
+      showName: !!f.show_name,
+      furnitureId: f.id,
+      fromFurniture: true,
+      // a printing, paused or failed printer shows its pin by itself
+      show: f.marker ?? (busy || s.phase === "failed" ? "always" : undefined),
+    };
+  }
 
   /** A wall switch's or socket's menu: one button per gang, tapped it switches that gang. */
   private renderGangMenu() {
@@ -5354,7 +5571,82 @@ export class Fp3dView3d extends LitElement {
     if (floor && f) this.viewer?.focus(floor.id, f.x, f.z, mountBase(floor, f) + f.h * 0.6, `module:${m.id}`);
   }
 
+  /** A tap on a spa's water or pump unit opens its controls; a second tap on it closes them. */
+  private onSpaTap(areaId: string, x: number, y: number): void {
+    this.closeSolarCard();
+    this._spaMenu = this._spaMenu?.areaId === areaId ? null : { areaId, x, y };
+  }
+
+  /**
+   * A spa's controls: the water temperature with its target (− and +), the heating, and a button each for bubbles, jets,
+   * filter and disinfection. Every button is its entity: a tap switches it.
+   */
+  private renderSpaMenu() {
+    const m = this._spaMenu;
+    const hass = this.hass;
+    const area = m && this.building?.floors.flatMap((f) => f.outdoor ?? []).find((a) => a.id === m.areaId);
+    const spa = area?.spa;
+    if (!m || !hass || !area || !spa) return nothing;
+    const t = (k: Parameters<typeof translate>[1], vars: Record<string, string | number> = {}) => translate(hass, k, vars);
+    const s = spaState(hass, spa);
+    const id = (v: EntityRef | undefined) => (typeof v === "string" && v !== "none" && v !== "" ? v : null);
+    const cid = id(spa.climate);
+    const cl = cid ? hass.states[cid] : undefined;
+    const num = (v: unknown, fallback: number) => (Number.isFinite(Number(v)) && v !== null && v !== "" ? Number(v) : fallback);
+    const step = num(cl?.attributes.target_temp_step, 0.5) > 0 ? num(cl?.attributes.target_temp_step, 0.5) : 0.5;
+    const lo = num(cl?.attributes.min_temp, 10);
+    const hi = num(cl?.attributes.max_temp, 40);
+    const setTarget = (v: number) => cid && void hass.callService("climate", "set_temperature", { entity_id: cid, temperature: Math.round(Math.min(hi, Math.max(lo, v)) * 10) / 10 });
+    const modes = Array.isArray(cl?.attributes.hvac_modes) ? (cl!.attributes.hvac_modes as string[]) : ["off", "heat"];
+    const onMode = modes.includes("heat") ? "heat" : (modes.find((x) => x !== "off") ?? "heat");
+    const toggleHeat = () => cid && void hass.callService("climate", "set_hvac_mode", { entity_id: cid, hvac_mode: s.heatMode ? "off" : onMode });
+    const button = (key: "bubbles" | "jets" | "filter" | "sanitizer", icon: string, label: Parameters<typeof translate>[1]) => {
+      const ent = id(spa[key]);
+      const st = ent ? hass.states[ent] : undefined;
+      return html`<button class="fp3d-chip" aria-pressed=${s[key]} ?disabled=${!ent || (st ? isUnavailable(st) : true)} @click=${() => ent && void toggleEntity(hass, ent)}>${icon} ${t(label)}</button>`;
+    };
+    const stage = this.renderRoot.querySelector<HTMLElement>(".fp3d-stage")?.clientWidth ?? 800;
+    const left = Math.min(Math.max(m.x, 160), Math.max(160, stage - 160));
+    const top = Math.max(m.y, 300);
+    const unit = (hass.config?.unit_system?.temperature as string | undefined) ?? "°C";
+    const status = !s.heatMode ? t("spa_status_off") : s.heating ? t("spa_status_heating") : t("spa_status_ready");
+    return html`<div class="fp3d-menu-backdrop" @click=${() => (this._spaMenu = null)}></div>
+      <div class="fp3d-swipe fp3d-info fp3d-spa-menu" style="left:${left}px;top:${top}px">
+        <div class="fp3d-spa-head"><b>♨ ${area.name || t("spa_menu_title")}</b><button class="fp3d-holo-x" aria-label=${t("solar_card_close")} @click=${() => (this._spaMenu = null)}>×</button></div>
+        <div class="fp3d-spa-temp">
+          <span class="fp3d-spa-now">${s.temp !== null ? `${formatNumber(hass, s.temp, 1)} ${unit}` : "–"}</span>
+          <small>${status}</small>
+        </div>
+        ${s.target !== null
+          ? html`<div class="fp3d-spa-target">
+              <span>${t("spa_menu_target")}</span>
+              <button class="fp3d-chip" aria-label="−" @click=${() => setTarget((s.target ?? lo) - step)}>−</button>
+              <b>${formatNumber(hass, s.target, 1)} ${unit}</b>
+              <button class="fp3d-chip" aria-label="+" @click=${() => setTarget((s.target ?? lo) + step)}>+</button>
+            </div>`
+          : nothing}
+        <div class="fp3d-spa-buttons">
+          ${cid ? html`<button class="fp3d-chip" aria-pressed=${s.heatMode} ?disabled=${!cl || isUnavailable(cl)} @click=${toggleHeat}>🔥 ${t("spa_btn_heat")}</button>` : nothing}
+          ${button("bubbles", "🫧", "spa_btn_bubbles")} ${button("jets", "💦", "spa_btn_jets")} ${button("filter", "🌀", "spa_btn_filter")} ${button("sanitizer", "🧪", "spa_btn_sanitizer")}
+        </div>
+      </div>`;
+  }
+
+  /** A tap on a solar module opens its card; a second tap on it closes the card. */
+  private onSolarTap(fieldId: string, cell: string): void {
+    const same = this._solarPick?.fieldId === fieldId && this._solarPick.cell === cell;
+    this._solarPick = same ? null : { fieldId, cell };
+    this.syncDevices(true);
+  }
+
+  private closeSolarCard(): void {
+    if (!this._solarPick) return;
+    this._solarPick = null;
+    this.syncDevices(true);
+  }
+
   private onDeviceTap(entityId: string, x = 0, y = 0): void {
+    this.closeSolarCard();
     // trail pins and lamps without a light are drawn, but nothing of Home Assistant stands behind them
     if (entityId.startsWith("trail:") || entityId.startsWith("lamp:")) return;
     if (entityId.startsWith("module:")) return this.openModuleCard(entityId.slice(7));
@@ -5608,7 +5900,7 @@ export class Fp3dView3d extends LitElement {
       style=${style}
     >
       ${this._error ? html`<p class="fp3d-error">${this._error}</p>` : nothing} ${this.clean ? nothing : this.renderEnergy()} ${this.renderHologram()} ${this.clean ? nothing : this.renderLegend()}
-      ${this.renderClock()} ${this.renderAlerts()} ${this.clean || this._walk ? nothing : html`${this.renderHousehold()} ${this.renderThumbs()} ${this.renderScenes()} ${this.renderFind()} ${this.renderCentral()}`} ${this.clean ? nothing : this.renderWalk()} ${this.renderSwipe()} ${this.renderInfo()} ${this.renderBinInfo()} ${this.renderGangMenu()} ${this.renderThrough()} ${this.renderCameraWall()} ${this.renderSheet()} ${this.renderSettings()} ${this.renderNote()}
+      ${this.renderClock()} ${this.renderAlerts()} ${this.clean || this._walk ? nothing : html`${this.renderHousehold()} ${this.renderThumbs()} ${this.renderScenes()} ${this.renderFind()} ${this.renderCentral()}`} ${this.clean ? nothing : this.renderWalk()} ${this.renderSwipe()} ${this.renderInfo()} ${this.renderBinInfo()} ${this.renderGangMenu()} ${this.renderSpaMenu()} ${this.renderThrough()} ${this.renderCameraWall()} ${this.renderSheet()} ${this.renderSettings()} ${this.renderNote()}
       ${this.clean ? nothing : this.renderProHint()} ${this.renderMenu()} ${this.renderEye()}
       ${this.renderMic()}
       ${this._announce ? html`<div class="fp3d-announce" role="status" @click=${() => (this._announce = null)}>📢 ${this._announce}</div>` : nothing}
@@ -5636,6 +5928,131 @@ export class Fp3dView3d extends LitElement {
       }
       /* a tag: light text on a solid dark plate, the bin's colour as its edge and a soft glow (coloured text – a
          blue paper bin's – was hard to read) */
+      /* a solar field's card (and a tapped module's): a dark plate with large type, readable over the roof from afar */
+      .fp3d-holo.fp3d-holo-solar {
+        width: auto;
+        min-width: 190px;
+        padding: 10px 14px 11px;
+        border-radius: 12px;
+        background: rgba(9, 13, 22, 0.94);
+        backdrop-filter: none;
+        -webkit-backdrop-filter: none;
+        border: 1.5px solid #ffb347;
+        box-shadow: 0 0 14px rgba(255, 179, 71, 0.35), 0 2px 6px rgba(0, 0, 0, 0.5);
+        color: #f5f8ff;
+        text-shadow: none;
+        cursor: default;
+        pointer-events: none;
+      }
+      .fp3d-holo.fp3d-holo-solar-one {
+        border-color: var(--fp3d-accent, #37e0ff);
+        box-shadow: 0 0 16px rgba(55, 224, 255, 0.4), 0 2px 6px rgba(0, 0, 0, 0.5);
+        pointer-events: auto;
+      }
+      .fp3d-holo-solar .fp3d-holo-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        font: 700 15px var(--fp3d-title-font);
+        color: #ffffff;
+        white-space: nowrap;
+      }
+      .fp3d-spa-menu {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        min-width: 270px;
+        max-width: 92vw;
+        z-index: 6;
+        white-space: normal;
+      }
+      .fp3d-spa-menu,
+      .fp3d-spa-menu * {
+        pointer-events: auto;
+      }
+      .fp3d-spa-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+      }
+      .fp3d-spa-head b {
+        font: 700 15px var(--fp3d-title-font);
+      }
+      .fp3d-spa-temp {
+        display: flex;
+        align-items: baseline;
+        gap: 10px;
+      }
+      .fp3d-spa-now {
+        font-size: 30px;
+        font-weight: 700;
+        line-height: 1.1;
+        color: var(--fp3d-text);
+        font-variant-numeric: tabular-nums;
+      }
+      .fp3d-spa-target {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+      .fp3d-spa-target b {
+        min-width: 70px;
+        text-align: center;
+        font-size: 16px;
+      }
+      .fp3d-spa-buttons {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+      .fp3d-holo-x {
+        background: none;
+        border: 0;
+        padding: 0 2px;
+        margin: -4px -4px -4px 0;
+        font-size: 24px;
+        line-height: 1;
+        color: #ffffff;
+        cursor: pointer;
+      }
+      .fp3d-holo-solar-big {
+        display: flex;
+        align-items: baseline;
+        gap: 8px;
+        margin-top: 4px;
+        white-space: nowrap;
+      }
+      .fp3d-holo-solar-big b {
+        font-size: 26px;
+        font-weight: 700;
+        line-height: 1.1;
+        color: #ffd27a;
+        font-variant-numeric: tabular-nums;
+      }
+      .fp3d-holo-solar-big span {
+        font-size: 14px;
+        color: #dfe5f0;
+      }
+      .fp3d-holo-solar .fp3d-holo-bar {
+        height: 7px;
+        margin: 8px 0 6px;
+        border-radius: 4px;
+        overflow: hidden;
+        background: rgba(255, 255, 255, 0.16);
+      }
+      .fp3d-holo-solar .fp3d-holo-bar > div {
+        height: 100%;
+        border-radius: 4px;
+        background: linear-gradient(90deg, #ff9a2e, #ffd27a);
+      }
+      .fp3d-holo-solar-sub {
+        font-size: 13px;
+        line-height: 1.3;
+        color: #cfd7e6;
+        white-space: nowrap;
+      }
       .fp3d-holo.fp3d-holo-bin {
         min-width: 0;
         width: auto;
@@ -6150,8 +6567,18 @@ export class Fp3dView3d extends LitElement {
       .fp3d-person[hidden] {
         display: none;
       }
-      .fp3d-no-room-names .fp3d-pin {
+      /* the room names off: the floors' labels and the rooms without values go, the values stay (without their names) */
+      .fp3d-no-room-names .fp3d-pin:not(.fp3d-pin-room),
+      .fp3d-no-room-names .fp3d-pin-room:not(.fp3d-pin-info) {
         display: none !important;
+      }
+      .fp3d-no-room-names .fp3d-pin-name {
+        display: none;
+      }
+      .fp3d-no-room-names .fp3d-pin-info small {
+        font-size: 13px;
+        font-weight: 700;
+        opacity: 1;
       }
       /* tablet level: blur over the canvas and glowing shadows are expensive on weak GPUs */
       .fp3d-stage.fp3d-low {

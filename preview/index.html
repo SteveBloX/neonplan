@@ -14,12 +14,22 @@
   </head>
   <body>
     <neonplan3d-panel></neonplan3d-panel>
+    <script>
+      // local development (npm run dev): reload when a bundle or a preview file changes
+      if (["localhost", "127.0.0.1"].includes(location.hostname)) new EventSource("/__reload").onmessage = () => location.reload();
+    </script>
     <script type="module">
       // Mock of the Home Assistant frontend object with invented demo data.
       import { DEMO_AREAS, DEMO_BUILDING, DEMO_FLOORS, DEMO_PACK, DEMO_ENTITIES, DEMO_STATES, DEMO_PICTURES } from "./demo-data.js";
       import { demoHistory } from "./demo-history.js";
+      import { loadHouse } from "./house-mock.js";
 
       const params = new URLSearchParams(location.search);
+      // your own plan: private/house.json (not in git) is loaded by itself, with invented states for the entities it links.
+      // ?demo shows the invented demo house instead.
+      const house = params.has("demo") || params.has("empty") ? null : await loadHouse("../private/house.json");
+      // with your own plan the Pro add-ons are locked, like in your Home Assistant (?pro unlocks the demo pack)
+      const noPro = params.has("nopro") || (house !== null && !params.has("pro"));
       // the power flow lines are on with ?flows (and off without, whatever an earlier page stored)
       try {
         localStorage.setItem("neonplan3d.flows", params.has("flows") ? "1" : "0");
@@ -51,7 +61,30 @@
         newsletter: params.has("shop") ? { url: "https://mastershort.de/neonplan3d/newsletter/" } : null,
         updates: params.has("shop") ? [{ id: "mastershort.kitchen", name: "Küche", release: 2, added: 10, at: Date.now() / 1000 - 600 }] : [],
       };
-      let building = params.has("empty") ? { version: 1, floors: [], settings: { wall_exterior: 0.24, wall_interior: 0.12, grid: 0.05 } } : DEMO_BUILDING;
+      let building = params.has("empty") ? { version: 1, floors: [], settings: { wall_exterior: 0.24, wall_interior: 0.12, grid: 0.05 } } : (house?.building ?? DEMO_BUILDING);
+      // your own plan keeps the changes made on this page across reloads (the page reloads on every code change);
+      // a new export in private/house.json replaces them, and ?reset throws them away
+      const PLAN_KEY = "neonplan3d.preview.building";
+      const hashOf = (s) => [...s].reduce((h, ch) => (Math.imul(31, h) + ch.charCodeAt(0)) | 0, 0).toString(36);
+      const houseSig = house ? hashOf(JSON.stringify(house.building)) : null;
+      if (params.has("reset")) {
+        for (const k of [PLAN_KEY, "neonplan3d.sim"]) localStorage.removeItem(k);
+      } else if (house) {
+        try {
+          const kept = JSON.parse(localStorage.getItem(PLAN_KEY) ?? "null");
+          if (kept?.sig === houseSig) building = kept.building;
+        } catch {
+          /* no storage */
+        }
+      }
+      const keepPlan = () => {
+        if (!house) return;
+        try {
+          localStorage.setItem(PLAN_KEY, JSON.stringify({ sig: houseSig, building }));
+        } catch {
+          /* no storage */
+        }
+      };
       let revision = 1;
       // off like on a fresh installation; the screenshots switch it on through the editor
       const diag = { enabled: false };
@@ -68,7 +101,7 @@
           // the demo has NeonPlan Pro unless ?nopro asks for the locked look
           // add-ons not out yet (Pool Pro) only on a local preview or with ?pool, not on the public demo
           const unreleasedDemo = params.has("pool") || ["localhost", "127.0.0.1"].includes(location.hostname);
-          if (!params.has("nopro")) importedPacks.push({ format: "fp3dpack", version: 1, id: "demo.pro", name: "NeonPlan Pro (Demo)", publisher: "Mastershort", licensee: null, features: ["camera_cockpit", "weather", "screens", "energy_pro", "sound", "auto_pro", "time_travel", "household", "fun_pets", "fun_halloween", ...(unreleasedDemo ? ["pool"] : [])], items: [] });
+          if (!noPro) importedPacks.push({ format: "fp3dpack", version: 1, id: "demo.pro", name: "NeonPlan Pro (Demo)", publisher: "Mastershort", licensee: null, features: ["camera_cockpit", "weather", "screens", "energy_pro", "sound", "auto_pro", "time_travel", "household", "fun_pets", "fun_halloween", ...(unreleasedDemo ? ["pool"] : [])], items: [] });
           try {
             const res = await fetch("../private/packs/starter.json");
             if (res.ok) importedPacks.push({ licensee: null, ...(await res.json()) });
@@ -82,19 +115,19 @@
           }
         }
         // ?nopro also drops local feature packs, so the locked look can be seen
-        return params.has("nopro") ? importedPacks.filter((p) => !p.features?.length) : importedPacks;
+        return noPro ? importedPacks.filter((p) => !p.features?.length) : importedPacks;
       }
 
       const hass = {
-        language: params.get("lang") || "de",
+        language: params.get("lang") || (house ? "fr" : "de"),
         user: { is_admin: !params.has("user"), name: "Demo" },
-        areas: DEMO_AREAS,
-        floors: DEMO_FLOORS,
-        entities: DEMO_ENTITIES,
+        areas: house ? {} : DEMO_AREAS,
+        floors: house ? {} : DEMO_FLOORS,
+        entities: house?.entities ?? DEMO_ENTITIES,
         devices: {},
         // an invented spot in Germany: the time travel computes the sun from it
         config: { latitude: 52.52, longitude: 13.405 },
-        states: structuredClone(DEMO_STATES),
+        states: structuredClone(house?.states ?? DEMO_STATES),
         connection: {
           async subscribeMessage(cb) {
             listeners.add(cb);
@@ -164,6 +197,7 @@
               // ?savefail simulates a backend that still runs an older version
               if (params.has("savefail")) throw { code: "invalid_format", message: "extra keys not allowed @ data['building']['floors'][0]['furniture'][0]['entity']" };
               building = structuredClone(msg.building);
+              keepPlan();
               revision += 1;
               for (const cb of listeners) cb({ revision });
               return { revision };
@@ -255,7 +289,7 @@
             }
             case "neonplan3d/timetravel/history":
               // the time travel: an invented week of the demo household (?tt=07:42 or ?tt=-3h opens it there)
-              if (params.has("nopro")) throw { code: "not_unlocked", message: "Time travel is a Pro add-on" };
+              if (noPro) throw { code: "not_unlocked", message: "Time travel is a Pro add-on" };
               return demoHistory(msg, hass.states);
             case "history/history_during_period": {
               // invented motion of the last half hour: hall, kitchen, then the living-room camera
@@ -365,7 +399,7 @@
         document.querySelector("neonplan3d-panel").remove();
         const CardClass = customElements.get("neonplan3d-card");
         const wrap = document.createElement("div");
-        wrap.style.cssText = "display:grid;grid-template-columns:420px 1fr;gap:24px;padding:24px;font-family:Figtree,Roboto,sans-serif;--primary-text-color:#e1e1e1;--secondary-text-color:#9b9b9b;--card-background-color:#1c1c1c;--primary-color:#03a9f4;--divider-color:rgba(225,225,225,.2)";
+        wrap.style.cssText = `display:grid;grid-template-columns:${params.has("noeditor") ? "1fr" : "420px 1fr"};gap:24px;padding:24px;font-family:Figtree,Roboto,sans-serif;--primary-text-color:#e1e1e1;--secondary-text-color:#9b9b9b;--card-background-color:#1c1c1c;--primary-color:#03a9f4;--divider-color:rgba(225,225,225,.2)`;
         const editorBox = document.createElement("div");
         editorBox.style.cssText = "background:#1c1c1c;border-radius:12px;padding:20px";
         const editor = await CardClass.getConfigElement();
@@ -384,6 +418,12 @@
           ...(params.has("kiosk") ? { idle_return: 1, idle_orbit: true } : {}),
           ...(params.has("tt") ? { time_travel: true } : {}),
           ...(params.has("fill") ? { fill: true } : {}),
+          // ?card&plan: the plan view (from above, no roof); &angle=20 tilts it, &rot=90 turns it; &solartotal: one solar card on the roof
+          ...(params.has("plan") ? { plan_view: true, plan_angle: Number(params.get("angle")) || 0, plan_rotation: Number(params.get("rot")) || 0, controls: true, height: 640 } : {}),
+          ...(params.has("solartotal") ? { solar_total: true } : {}),
+          // &names=0: no room names (the values stay); &valtemp: only the temperature beside the rooms
+          ...(params.get("names") === "0" ? { room_names: false } : {}),
+          ...(params.has("valtemp") ? { room_values: "temperature" } : {}),
         };
         card.setConfig(config);
         editor.setConfig(config);
@@ -395,7 +435,9 @@
         editor.hass = hass;
         card.hass = hass;
         editorBox.append(editor);
-        wrap.append(editorBox, card);
+        // ?noeditor: the card alone (a small screen); without it the card editor stands beside the card
+        if (params.has("noeditor")) wrap.append(card);
+        else wrap.append(editorBox, card);
         document.body.append(wrap);
         window.fp3dCard = card;
       } else {
@@ -404,6 +446,21 @@
         window.addEventListener("hass-more-info", (e) => console.log("more-info", e.detail.entityId));
         panel.narrow = window.innerWidth < 870;
         window.fp3dPanel = panel;
+      }
+      // local development: the simulator creates test entities with a value range (?nosim leaves it out)
+      if (["localhost", "127.0.0.1"].includes(location.hostname) && !params.has("nosim") && !params.has("site")) {
+        const { installSim } = await import("./sim.js");
+        installSim({
+          getHass: () => current,
+          setHass: (h) => {
+            current = h;
+            (window.fp3dCard ?? window.fp3dPanel).hass = h;
+          },
+          reset: () => {
+            for (const k of [PLAN_KEY, "neonplan3d.sim"]) localStorage.removeItem(k);
+            location.reload();
+          },
+        });
       }
     </script>
   </body>

@@ -73,6 +73,13 @@ import { houseShadow, shadowBox } from "./sun-shadow.ts";
 import type { SunPath } from "../sun-path.ts";
 import { GROUND, groundFace, groundFloor, roofFaces, roofWindowRoom, wallFaces } from "../solar.ts";
 import { buildSolarLive, solarLiveMaterial, writeSolarLevels, type SolarLive } from "./solar-live.ts";
+import { pushGate } from "./gate.ts";
+import { pushFlames } from "./fireplace.ts";
+import { pushPrinter } from "./printer-view.ts";
+import { printerSignature, type PrinterState } from "../printer.ts";
+import { buildSpas, disposeSpas, fadeSpas, pushSpaUnit } from "./spa-view.ts";
+import { spaSignature, type SpaPiece } from "../spa.ts";
+import { buildSolarFill, fillKeyAt, solarFillMaterial, writeFillLevels, type SolarFill } from "./solar-fill.ts";
 import { buildPools, disposePools, type PoolPiece } from "./pool-water.ts";
 import { accentOnUniform, accentUniform, parseAccent, lineBlending, themed, themeIndex, type Theme, type ThemeUniform } from "./theme.ts";
 
@@ -109,6 +116,10 @@ export interface ViewerOptions {
   onBack?: () => void;
   /** Short tap on a device marker. */
   onDeviceTap?: (entityId: string, x: number, y: number) => void;
+  /** Short tap on a solar module (its field and cell "row:column"). */
+  onSolarTap?: (fieldId: string, cell: string) => void;
+  /** Short tap on a spa's water or pump unit (its area id and the tap point on the stage). */
+  onSpaTap?: (areaId: string, x: number, y: number) => void;
   /** Double tap on a room of the opened floor (without it, a double tap goes one level back). */
   onRoomDoubleTap?: (floorId: string, roomId: string) => void;
   /** Long press on a device marker. */
@@ -290,7 +301,7 @@ export interface ScreenState {
   /** Furniture with a state: glowing faces on top of the item instead of a screen – the whole top, or a half of it. */
   // (see also SoundSource below)
   // "gang": one rocker or socket of a wall switch or socket (`index` of `of`)
-  faces?: { part: "all" | "left" | "right" | "top" | "bottom" | "band" | "cabin" | "lights" | "burners" | "lid" | "beacon" | "gang" | "drum" | "apring" | "strata"; color: [number, number, number]; level: number; index?: number; of?: number; accent?: boolean; top?: [number, number, number] }[];
+  faces?: { part: "all" | "left" | "right" | "top" | "bottom" | "band" | "cabin" | "lights" | "burners" | "lid" | "beacon" | "gang" | "drum" | "apring" | "strata" | "fill"; color: [number, number, number]; level: number; fraction?: number; index?: number; of?: number; accent?: boolean; top?: [number, number, number] }[];
 }
 
 /** Position of the sun (from sun.sun): degrees above the horizon and clockwise from north. */
@@ -441,6 +452,8 @@ interface FloorMaterials {
   patchGlow: MeshBasicMaterial;
   /** Energie Pro: the living overlay of the solar fields on this floor (garden, walls). */
   solarLive: MeshBasicMaterial;
+  /** The "fill" look of the solar modules on this floor (garden, walls). */
+  solarFill: MeshBasicMaterial;
   lamps: MeshBasicMaterial;
   halos: PointsMaterial;
   cones: MeshBasicMaterial;
@@ -477,6 +490,11 @@ interface FloorView {
   /** The living solar overlay of this floor's fields, if it has any. */
   solarMesh: Mesh | null;
   solarLive: SolarLive | null;
+  fillMesh: Mesh | null;
+  solarFill: SolarFill | null;
+  /** The modules of this floor's fields as an invisible mesh: what a tap on a module is picked with. */
+  pickMesh: Mesh | null;
+  pickFill: SolarFill | null;
   lampMesh: Mesh;
   /** Sunlight falling through the windows onto the floor. */
   sunMesh: Mesh;
@@ -514,6 +532,8 @@ interface FloorView {
   soundGroup?: Group;
   /** Pool Pro: the living water and covers of the pools on this floor. */
   poolGroup?: Group;
+  /** The water tint, bubbles and jets of the floor's spas. */
+  spaGroup?: Group;
   /** Pictures shown on lit screens, by furniture id. */
   screenPics: Map<string, { url: string; mesh: Mesh; texture: Texture | null }>;
   /** Content signatures: meshes are only rebuilt when these change. */
@@ -665,6 +685,10 @@ export class FloorplanViewer {
     glass: MeshBasicMaterial;
     live: MeshBasicMaterial;
     lives: SolarLive[];
+    fill: MeshBasicMaterial;
+    fills: SolarFill[];
+    /** The roof's modules as invisible meshes, for picking a tap. */
+    picks: { mesh: Mesh; fill: SolarFill }[];
     /** The roof windows, apart from the roof: they stay while the roof fades over a room. */
     wins: Group;
     winSolid: MeshBasicMaterial;
@@ -673,12 +697,16 @@ export class FloorplanViewer {
     roofWinGlass: MeshBasicMaterial;
   } | null = null;
   /** The hologram's anchor: a point on the solar field (building coordinates) and the field's normal. */
-  private anchors: { p: [number, number, number]; n: [number, number, number]; floorId: string; size: number; roof: boolean; views: "house" | "all" | "floor"; room?: string | null; near?: number }[] = [];
+  private anchors: { p: [number, number, number]; n: [number, number, number]; floorId: string; size: number; roof: boolean; views: "house" | "all" | "floor"; room?: string | null; near?: number; withRoof?: boolean }[] = [];
   /** Told where the anchor lies on screen after every frame, how large the hologram should be and whether its front faces the camera. */
   private anchorCb: ((index: number, x: number, y: number, visible: boolean, scale: number, facing: boolean) => void) | null = null;
   /** Energie Pro: production level (0..1) per solar field; the overlays animate while any is above zero. */
   private solarLevels = new Map<string, number>();
   private solarActive = false;
+  /** The "fill" look: share of its peak (0..1) per module, by field and cell. */
+  private fillLevels = new Map<string, number>();
+  /** Invisible material of the meshes a tap on a solar module is picked with. */
+  private readonly pickMat = new MeshBasicMaterial({ visible: false, side: DoubleSide });
   private roofO = 0;
   /** The roof stays put while the camera comes close (no lift, no fade): the editor's roof tool, or a choice of the viewer. */
   private keepRoof = false;
@@ -925,6 +953,15 @@ export class FloorplanViewer {
     this.controls.angleLock = on;
   }
 
+  /** The plan view of the dashboard card: the camera looks from this angle (theta turns, phi tilts from straight above) at every floor. */
+  private planView: { theta: number; phi: number } | null = null;
+
+  setPlanView(view: { theta: number; phi: number } | null): void {
+    const same = JSON.stringify(view) === JSON.stringify(this.planView);
+    this.planView = view;
+    if (!same && this.floors.length) this.fit(600);
+  }
+
   setFloor(floorId: string | null, animate = true): void {
     this.lastWake = performance.now();
     this.keepNext = this.keepView && floorId !== null && this.floorId !== null && floorId !== this.floorId;
@@ -1094,7 +1131,7 @@ export class FloorplanViewer {
    * The holograms' anchors: points on the solar fields with their normals (they ride up with the roof and
    * show in the house view only), and points over devices (shown on their floor as well).
    */
-  setAnchors(anchors: { p: [number, number, number]; n: [number, number, number]; floorId: string; size: number; roof: boolean; views: "house" | "all" | "floor"; room?: string | null; near?: number }[]): void {
+  setAnchors(anchors: { p: [number, number, number]; n: [number, number, number]; floorId: string; size: number; roof: boolean; views: "house" | "all" | "floor"; room?: string | null; near?: number; withRoof?: boolean }[]): void {
     this.anchors = anchors;
     this.labelsDirty = true;
     this.invalidate();
@@ -1107,6 +1144,14 @@ export class FloorplanViewer {
     for (const l of this.roof?.lives ?? []) if (writeSolarLevels(l, levels)) alive = true;
     for (const fv of this.floors) if (fv.solarLive && writeSolarLevels(fv.solarLive, levels)) alive = true;
     this.solarActive = alive;
+    this.invalidate();
+  }
+
+  /** The "fill" look: how much of its peak every module makes (0..1, by field id and cell); drawn while a module has some. */
+  setSolarFill(levels: Map<string, number>): void {
+    this.fillLevels = levels;
+    for (const f of this.roof?.fills ?? []) writeFillLevels(f, levels);
+    for (const fv of this.floors) if (fv.solarFill) writeFillLevels(fv.solarFill, levels);
     this.invalidate();
   }
 
@@ -1838,7 +1883,11 @@ export class FloorplanViewer {
 
   /** The room name, with a line of values below it when there is one. */
   private fillRoomPin(pin: HTMLElement, name: string, info: string | undefined): void {
-    pin.textContent = name || "–";
+    // the name in a span of its own: the room names can be hidden while the values stay
+    const label = document.createElement("span");
+    label.className = "fp3d-pin-name";
+    label.textContent = name || "–";
+    pin.replaceChildren(label);
     if (info) {
       const small = document.createElement("small");
       small.textContent = info;
@@ -1913,13 +1962,89 @@ export class FloorplanViewer {
    * reports while it runs shows the awning run out slowly); without one it runs at its run time while it says
    * opening or closing.
    */
-  private awnings = new Map<string, { cur: number; to: number; speed: number }>();
+  private awnings = new Map<string, { cur: number; to: number; speed: number; unlocked?: boolean }>();
+  /** Built-in fireplaces: which fire burns now, and when its flames were last redrawn (they flicker). */
+  private fires = new Map<string, boolean>();
+  private fireAt = 0;
+  /** 3D printers: what each says now, a signature, and when the moving ones were last drawn. */
+  private printers = new Map<string, PrinterState>();
+  private printerSig = "";
+  private printerAt = 0;
 
-  setAwnings(states: Map<string, { out: number | null; moving: -1 | 0 | 1; time: number }>): void {
+  /** What the 3D printers say now: a printing one moves its head and grows its part, the others stand still. */
+  setPrinters(states: Map<string, PrinterState>): void {
+    const sig = [...states].map(([id, s]) => `${id}=${printerSignature(s)}`).join("|");
+    if (sig === this.printerSig) return;
+    this.printerSig = sig;
+    this.printers = states;
+    for (const fv of this.floors) if (fv.floor.furniture.some((f) => states.has(f.id))) this.buildFridges(fv);
+    this.invalidate();
+  }
+
+  private get printing(): boolean {
+    for (const s of this.printers.values()) if (s.phase === "printing") return true;
+    return false;
+  }
+  /** Spas (a pool with its entities): the pieces drawn now, a signature of them, when the pump units were last redrawn. */
+  private spas: SpaPiece[] = [];
+  private spaSig = "";
+  private spaAt = 0;
+
+  /** The spas of the building as they look now (water colour, bubbles, jets, heating, filter, disinfection). */
+  setSpas(list: SpaPiece[]): void {
+    const sig = list.map(spaSignature).join("|");
+    if (sig === this.spaSig) return;
+    this.spaSig = sig;
+    this.spas = list;
+    for (const fv of this.floors) {
+      this.buildSpaWater(fv);
+      if (this.spas.some((s) => s.floorId === fv.floor.id) || fv.fridgeMesh.visible) this.buildFridges(fv);
+    }
+    this.invalidate();
+  }
+
+  private buildSpaWater(fv: FloorView): void {
+    if (fv.spaGroup) {
+      disposeSpas(fv.spaGroup);
+      fv.group.remove(fv.spaGroup);
+      fv.spaGroup = undefined;
+    }
+    const mine = this.spas.filter((s) => s.floorId === fv.floor.id);
+    if (!mine.length) return;
+    fv.spaGroup = buildSpas(mine, this.flowTime);
+    fadeSpas(fv.spaGroup, fv.o);
+    fv.group.add(fv.spaGroup);
+  }
+
+  /** Something on a spa moves (bubbles, jets, heating, filter, disinfection): the loop keeps drawing. */
+  private get spaMoving(): boolean {
+    return this.spas.some((s) => s.state.bubbles || s.state.jets || s.animated);
+  }
+
+  /** Which fireplaces burn (their fan is on): the flames are drawn and flicker while they do. */
+  setFires(states: Map<string, boolean>): void {
+    const changed = new Set<string>();
+    for (const [id, on] of states) if (this.fires.get(id) !== on) changed.add(id);
+    for (const id of this.fires.keys()) if (!states.has(id)) changed.add(id);
+    this.fires = states;
+    if (!changed.size) return;
+    for (const fv of this.floors) if (fv.floor.furniture.some((f) => changed.has(f.id))) this.buildFridges(fv);
+    this.invalidate();
+  }
+
+  private get fireBurning(): boolean {
+    for (const on of this.fires.values()) if (on) return true;
+    return false;
+  }
+
+  setAwnings(states: Map<string, { out: number | null; moving: -1 | 0 | 1; time: number; unlocked?: boolean }>): void {
     const fresh = new Set<string>();
     for (const [id, a] of states) {
       if (!this.awnings.has(id)) fresh.add(id);
       const st = this.awnings.get(id) ?? { cur: a.out ?? 0, to: a.out ?? 0, speed: 0 };
+      // a gate's lock lights its post: a change of it redraws the gate even when nothing moves
+      if (st.unlocked !== a.unlocked) fresh.add(id);
+      st.unlocked = a.unlocked;
       if (a.out === null) {
         st.to = a.moving > 0 ? 1 : 0;
         st.speed = 1 / Math.max(2, a.time);
@@ -1980,7 +2105,41 @@ export class FloorplanViewer {
       }
     }
     for (const id of this.stepAwnings(dt)) touched.add(id);
-    if (!touched.size) return false;
+    // a burning fire flickers: its flames are drawn anew about seven times a second
+    if (this.fireBurning) {
+      const now = performance.now();
+      if (now - this.fireAt > 140) {
+        this.fireAt = now;
+        for (const [id, on] of this.fires) if (on) touched.add(id);
+      }
+    }
+    // a pump unit's lamps, impeller and pipes move while its filter, disinfection or heating runs: redrawn like the flames
+    let spaRedrawn = false;
+    if (this.spas.some((s) => s.animated)) {
+      const now = performance.now();
+      if (now - this.spaAt > 140) {
+        this.spaAt = now;
+        for (const fv of this.floors) {
+          if (!this.spas.some((s) => s.animated && s.floorId === fv.floor.id)) continue;
+          this.buildFridges(fv);
+          spaRedrawn = true;
+        }
+      }
+    }
+    // a printing printer moves about twenty times a second
+    let printRedrawn = false;
+    if (this.printing) {
+      const now = performance.now();
+      if (now - this.printerAt > 45) {
+        this.printerAt = now;
+        for (const fv of this.floors) {
+          if (!fv.floor.furniture.some((f) => this.printers.get(f.id)?.phase === "printing")) continue;
+          this.buildFridges(fv);
+          printRedrawn = true;
+        }
+      }
+    }
+    if (!touched.size) return spaRedrawn || printRedrawn;
     for (const fv of this.floors) if (fv.floor.furniture.some((f) => touched.has(f.id))) this.buildFridges(fv);
     return true;
   }
@@ -1994,6 +2153,17 @@ export class FloorplanViewer {
     }
     // awnings ride in the same mesh: they run out and in with their cover
     for (const f of fv.floor.furniture) if (f.type === "awning") pushAwning(buf, f, mountBase(fv.floor, f), this.awnings.get(f.id)?.cur ?? 0);
+    // 3D printers: head, part and lights
+    for (const f of fv.floor.furniture) {
+      const ps = f.type === "printer_3d" ? this.printers.get(f.id) : undefined;
+      if (ps) pushPrinter(buf, f, mountBase(fv.floor, f), ps, performance.now() / 1000);
+    }
+    // fireplaces: the flames of a fire that burns
+    for (const f of fv.floor.furniture) if (f.type === "fireplace" && this.fires.get(f.id)) pushFlames(buf, f, mountBase(fv.floor, f), performance.now() / 1000);
+    // the pump units of the spas on this floor, with their pipes
+    for (const s of this.spas) if (s.floorId === fv.floor.id) pushSpaUnit(buf, s, performance.now() / 1000);
+    // gates swing or slide open with their cover or contact
+    for (const f of fv.floor.furniture) if (f.type === "gate") pushGate(buf, f, mountBase(fv.floor, f), this.awnings.get(f.id)?.cur ?? 0, this.awnings.get(f.id)?.unlocked ?? null);
     // so do a motorised curtain and a roll-down screen from a pack (#511)
     for (const f of fv.floor.furniture) {
       const kind = packMotion(f.type);
@@ -2194,6 +2364,7 @@ export class FloorplanViewer {
     for (const r of this.robots.values()) r.group.removeFromParent();
     for (const f of this.fans.values()) f.group.removeFromParent();
     for (const fv of this.floors) {
+      if (fv.spaGroup) disposeSpas(fv.spaGroup);
       for (const pic of fv.screenPics.values()) {
         (pic.mesh.material as Material).dispose();
         pic.texture?.dispose();
@@ -2519,6 +2690,7 @@ export class FloorplanViewer {
       patch: new MeshBasicMaterial({ vertexColors: true, transparent: true, depthWrite: false, side: DoubleSide, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }),
       patchGlow: new MeshBasicMaterial({ vertexColors: true, transparent: true, blending: AdditiveBlending, depthWrite: false, side: DoubleSide, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }),
       solarLive: solarLiveMaterial(this.flowTime),
+      solarFill: solarFillMaterial(),
       lamps: themed(new MeshBasicMaterial({ vertexColors: true }), this.themeUniform),
       halos: new PointsMaterial({
         map: this.haloTexture,
@@ -2630,6 +2802,16 @@ export class FloorplanViewer {
         solarMesh.renderOrder = 6;
         writeSolarLevels(solarLive!, this.solarLevels);
       }
+      // the fill look of the garden and wall fields (free: no Pro add-on needed)
+      const solarFill = buildSolarFill(garden, floor.elevation);
+      const fillMesh = solarFill ? new Mesh(solarFill.geometry, materials.solarFill) : null;
+      if (fillMesh) {
+        fillMesh.renderOrder = 6;
+        writeFillLevels(solarFill!, this.fillLevels);
+      }
+      // every module of the garden and wall fields, invisible: a tap on one opens its card
+      const pickFill = buildSolarFill(garden, floor.elevation, true);
+      const pickMesh = pickFill ? new Mesh(pickFill.geometry, this.pickMat) : null;
       // the fold shader moves hidden parts, so the bounding spheres must not cull them early
       for (const m of [framesMesh, blindsMesh, glassMesh]) m.frustumCulled = false;
       // glass walls are drawn after everything opaque in the room, so doors and furniture show through
@@ -2674,6 +2856,8 @@ export class FloorplanViewer {
         screenMesh,
         glassWalls,
         ...(solarMesh ? [solarMesh] : []),
+        ...(fillMesh ? [fillMesh] : []),
+        ...(pickMesh ? [pickMesh] : []),
         ...earthParts,
       );
       this.root.add(group);
@@ -2695,7 +2879,7 @@ export class FloorplanViewer {
       // the rooms, and the outdoor areas acting as rooms (#100) with their names
       for (const room of zonesOf(floor)) {
         const pin = document.createElement("button");
-        pin.className = "fp3d-pin";
+        pin.className = "fp3d-pin fp3d-pin-room";
         pin.dataset.room = room.id;
         pin.dataset.floor = floor.id;
         this.fillRoomPin(pin, room.name, this.roomInfo.get(room.id));
@@ -2733,6 +2917,10 @@ export class FloorplanViewer {
         pipeLineSig: "",
         solarMesh,
         solarLive,
+        fillMesh,
+        solarFill,
+        pickMesh,
+        pickFill,
         lampMesh,
         sunMesh,
         sunSig: "",
@@ -2795,6 +2983,8 @@ export class FloorplanViewer {
       this.buildFlows(fv);
       fv.poolGroup = undefined;
       this.buildPoolWater(fv);
+      fv.spaGroup = undefined;
+      this.buildSpaWater(fv);
       this.buildLightSurface(fv);
       this.buildSun(fv);
     }
@@ -2813,6 +3003,7 @@ export class FloorplanViewer {
       this.roof.lines.dispose();
       this.roof.glass.dispose();
       this.roof.live.dispose();
+      this.roof.fill.dispose();
       this.roof.wins.traverse((o) => ((o as Mesh).geometry as BufferGeometry | undefined)?.dispose());
       this.roof.winSolid.dispose();
       this.roof.winLines.dispose();
@@ -2831,6 +3022,9 @@ export class FloorplanViewer {
     const fields = this.building!.settings.roof?.solar ?? [];
     const live = solarLiveMaterial(this.flowTime);
     const lives: SolarLive[] = [];
+    const fill = solarFillMaterial();
+    const fills: SolarFill[] = [];
+    const picks: { mesh: Mesh; fill: SolarFill }[] = [];
     const group = new Group();
     const solid = themed(new MeshBasicMaterial({ vertexColors: true, transparent: true, side: DoubleSide }), this.themeUniform);
     const lines = themed(new LineBasicMaterial({ vertexColors: true, transparent: true, blending: lineBlending(this.theme), depthWrite: false }), this.themeUniform, true);
@@ -2860,6 +3054,20 @@ export class FloorplanViewer {
         lives.push(overlay);
         writeSolarLevels(overlay, this.solarLevels);
       }
+      const fillOverlay = buildSolarFill(entries, geo.floor.elevation + geo.base);
+      if (fillOverlay) {
+        const mesh = new Mesh(fillOverlay.geometry, fill);
+        mesh.renderOrder = 9;
+        part.add(mesh);
+        fills.push(fillOverlay);
+        writeFillLevels(fillOverlay, this.fillLevels);
+      }
+      const pickFill = buildSolarFill(entries, geo.floor.elevation + geo.base, true);
+      if (pickFill) {
+        const mesh = new Mesh(pickFill.geometry, this.pickMat);
+        part.add(mesh);
+        picks.push({ mesh, fill: pickFill });
+      }
       // roof windows that only show in the roof ride and fade with it
       if (geo.winRoof?.solid.count) part.add(new Mesh(geo.winRoof.solid.geometry(), winSolid), new LineSegments(geo.winRoof.lines.geometry(), winLines));
       // their glass: as see-through as the windows in the walls, and it fades with the roof (#645)
@@ -2886,7 +3094,7 @@ export class FloorplanViewer {
     group.renderOrder = 8;
     this.scene.add(group);
     this.scene.add(wins);
-    this.roof = { group, parts, below, solid, lines, glass, live, lives, wins, winSolid, winLines, winGlass, roofWinGlass };
+    this.roof = { group, parts, below, solid, lines, glass, live, lives, fill, fills, picks, wins, winSolid, winLines, winGlass, roofWinGlass };
     this.placeRoof();
   }
 
@@ -2939,6 +3147,7 @@ export class FloorplanViewer {
     roof.glass.opacity = this.roofO * 0.28;
     roof.roofWinGlass.opacity = this.roofO * 0.35;
     roof.live.opacity = this.roofO;
+    roof.fill.opacity = this.roofO;
     return this.roofO !== before && this.roofO !== target;
   }
 
@@ -3033,6 +3242,8 @@ export class FloorplanViewer {
     m.glassWall.opacity = fv.o;
     m.flow.opacity = fv.o;
     m.solarLive.opacity = fv.o;
+    m.solarFill.opacity = fv.o;
+    if (fv.spaGroup) fadeSpas(fv.spaGroup, fv.o);
     m.lamps.opacity = fv.o;
     m.halos.opacity = fv.o;
     m.cones.opacity = fv.o;
@@ -3607,6 +3818,43 @@ export class FloorplanViewer {
             }
             continue;
           }
+          if (face.part === "fill") {
+            // a water tank's filling: the water seen through its shell from the foot up to its level, a bright line on top
+            const frac = Math.min(1, Math.max(0, face.fraction ?? 0));
+            const y0 = base + h * 0.06;
+            const yTop = y0 + (h * 0.88) * frac;
+            const k = 0.28 + 0.4 * face.level;
+            const water = new Color(...face.color.map((v) => Math.min(1, v * k)) as [number, number, number]);
+            const surface = new Color(...face.color.map((v) => Math.min(1, v * (0.7 + 0.3 * face.level) + 0.15)) as [number, number, number]);
+            if (frac > 0.01) {
+              if (f.variant === "wall") {
+                // a wall-hung tank is a box: the water shows in a window in its front
+                const aw = Math.abs(w);
+                const zf = d / 2 + 0.004;
+                const q = [P(-aw / 2 + 0.04, y0, zf), P(aw / 2 - 0.04, y0, zf), P(aw / 2 - 0.04, yTop, zf), P(-aw / 2 + 0.04, yTop, zf)];
+                buf.tri(q[0], q[1], q[2], water);
+                buf.tri(q[0], q[2], q[3], water);
+                buf.tri(q[3], q[2], P(aw / 2 - 0.04, yTop + 0.012, zf), surface);
+                buf.tri(q[3], P(aw / 2 - 0.04, yTop + 0.012, zf), P(-aw / 2 + 0.04, yTop + 0.012, zf), surface);
+              } else {
+                // a standing tank is round: rings of water round it
+                const rx = Math.min(Math.abs(w), d) / 2 + 0.012;
+                const n = 20;
+                for (let i = 0; i < n; i++) {
+                  const a0 = (i / n) * Math.PI * 2;
+                  const a1 = ((i + 1) / n) * Math.PI * 2;
+                  const q0 = [Math.cos(a0) * rx, Math.sin(a0) * rx];
+                  const q1 = [Math.cos(a1) * rx, Math.sin(a1) * rx];
+                  buf.tri(P(q0[0], y0, q0[1]), P(q1[0], y0, q1[1]), P(q1[0], yTop, q1[1]), water);
+                  buf.tri(P(q0[0], y0, q0[1]), P(q1[0], yTop, q1[1]), P(q0[0], yTop, q0[1]), water);
+                  // the surface line
+                  buf.tri(P(q0[0], yTop, q0[1]), P(q1[0], yTop, q1[1]), P(q1[0], yTop + 0.014, q1[1]), surface);
+                  buf.tri(P(q0[0], yTop, q0[1]), P(q1[0], yTop + 0.014, q1[1]), P(q0[0], yTop + 0.014, q0[1]), surface);
+                }
+              }
+            }
+            continue;
+          }
           if (face.part === "strata") {
             // layers: light round the item from its foot (colour) up to its top (top) – a tank warm above, cool below
             const top = face.top ?? face.color;
@@ -4095,6 +4343,11 @@ export class FloorplanViewer {
       this.controls.flyTo({ target: new Vector3(cur.target.x, center.y, cur.target.z), radius: cur.radius, phi: cur.phi, theta: cur.theta }, duration);
       return;
     }
+    // the plan view: from above at the set angle and turn, at the distance that fits the floor
+    if (this.planView) {
+      this.controls.flyTo({ target: center, radius, phi: this.planView.phi, theta: this.planView.theta }, duration, true);
+      return;
+    }
     this.controls.flyTo({ target: center, radius: useRadius ? start!.radius : radius, phi: start ? start.phi : 0.85, theta: start ? start.theta : -0.6 }, duration, !!start);
   }
 
@@ -4200,7 +4453,59 @@ export class FloorplanViewer {
     return null;
   }
 
+  /** The solar module under a screen point, with the roof shown (a faded roof lets the tap through). */
+  private pickModule(x: number, y: number): { fieldId: string; cell: string } | null {
+    const targets: { mesh: Mesh; fill: SolarFill }[] = [];
+    if (this.roof && this.roof.group.visible && this.roofO > ROOF_OPACITY * 0.6) targets.push(...this.roof.picks);
+    for (const fv of this.activeFloors()) if (fv.pickMesh && fv.pickFill) targets.push({ mesh: fv.pickMesh, fill: fv.pickFill });
+    if (!targets.length) return null;
+    const hits = this.rayAt(x, y).intersectObjects(
+      targets.map((t) => t.mesh),
+      false,
+    );
+    for (const hit of hits) {
+      if (hit.faceIndex == null) continue;
+      const fill = targets.find((t) => t.mesh === hit.object)?.fill;
+      const key = fill ? fillKeyAt(fill, hit.faceIndex) : null;
+      const at = key ? key.indexOf("|") : -1;
+      if (key && at > 0) return { fieldId: key.slice(0, at), cell: key.slice(at + 1) };
+    }
+    return null;
+  }
+
+  /** The spa under a screen point: its water, or its pump unit. */
+  private pickSpa(x: number, y: number): string | null {
+    for (const fv of this.activeFloors()) {
+      for (const s of this.spas) {
+        if (s.floorId !== fv.floor.id) continue;
+        const base = fv.floor.elevation + fv.y;
+        const water = this.floorPoint(fv, x, y, base + s.y);
+        if (water && pointInPolygon(water, s.points)) return s.id;
+        // the pump unit: its footprint, grown a little, at about its middle height
+        const unit = this.floorPoint(fv, x, y, base + s.unit.y + 0.4);
+        if (unit && Math.hypot(unit[0] - s.unit.x, unit[1] - s.unit.z) < 0.5) return s.id;
+      }
+    }
+    return null;
+  }
+
   private onTap(x: number, y: number): void {
+    // a spa's water or pump unit opens its controls
+    if (!this.furnish && this.spas.length) {
+      const spa = this.pickSpa(x, y);
+      if (spa) {
+        this.options.onSpaTap?.(spa, x, y);
+        return;
+      }
+    }
+    // a module of a solar field (not while furnishing: the editor picks its own things)
+    if (!this.furnish) {
+      const mod = this.pickModule(x, y);
+      if (mod) {
+        this.options.onSolarTap?.(mod.fieldId, mod.cell);
+        return;
+      }
+    }
     const hit = this.pick(x, y);
     if (hit && "entity" in hit && this.furnish) {
       this.selectDevice(hit.entity);
@@ -4963,6 +5268,9 @@ export class FloorplanViewer {
     if (this.soundActive) busy.push("sound");
     if (this.poolActive) busy.push("pool");
     if (this.solarActive) busy.push("solar");
+    if (this.fireBurning) busy.push("fire");
+    if (this.printing) busy.push("printer");
+    if (this.spaMoving) busy.push("spa");
     if (this.effectTick) busy.push("effect");
     if (robotsMoving) busy.push("robot");
     if (fansTurning) busy.push("fan");
@@ -4988,7 +5296,7 @@ export class FloorplanViewer {
     this.reportStats(now, busy);
     if (moving) this.invalidate();
     // tablet level: something new began to move (music, a robot, the energy flow …) – it shows for a while
-    const decorNow = this.flowActive || this.solarActive || this.soundActive || this.poolActive || robotsMoving || fansTurning || this.effectFloors.size > 0;
+    const decorNow = this.flowActive || this.solarActive || this.fireBurning || this.spaMoving || this.printing || this.soundActive || this.poolActive || robotsMoving || fansTurning || this.effectFloors.size > 0;
     if (decorNow && !this.decorWas) this.lastWake = now;
     this.decorWas = decorNow;
     // colour effects: a few steps per second are enough and keep the tablet idle in between
@@ -5022,7 +5330,7 @@ export class FloorplanViewer {
         this.invalidate();
       }, 33);
     }
-    const flowing = this.flowActive || this.solarActive || this.soundActive || this.poolActive;
+    const flowing = this.flowActive || this.solarActive || this.fireBurning || this.spaMoving || this.printing || this.soundActive || this.poolActive;
     if (this.lowQuality) {
       // tablet level: every decorative animation shares one frame about 5 times a second (12 while fan blades turn,
       // fewer would make them seem to stand or turn back) and rests 30 s after the last touch
@@ -5162,6 +5470,11 @@ export class FloorplanViewer {
         }
         // a single floor is the house view as well (#255)
         if (this.floorId !== null && this.floors.length > 1 && (a.views === "house" || a.floorId !== this.floorId)) {
+          this.anchorCb!(i, 0, 0, false, 1, true);
+          return;
+        }
+        // a card on a roof's solar field goes with the roof: gone while it is faded or off
+        if (a.withRoof && (!this.roof || this.roofO < ROOF_OPACITY * 0.6)) {
           this.anchorCb!(i, 0, 0, false, 1, true);
           return;
         }

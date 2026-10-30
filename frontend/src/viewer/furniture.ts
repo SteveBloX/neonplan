@@ -5,11 +5,12 @@
 
 import { Color } from "three";
 import type { Furniture, Vec2 } from "../model.ts";
-import { builtinBase, gangsOf, stairsULayout, POOL_VALVE_Y } from "../model.ts";
+import { builtinBase, fireOpening, gangsOf, stairsULayout, POOL_VALVE_Y } from "../model.ts";
 import { isRobotVacuum, mountBase, packItem, packMotion, packMovingPart, packRobotCentre, packRobotPart, packScreen, type PackItem, type PackMotion, type PackPart } from "../packs.ts";
 import { fitParts } from "../pack-scale.ts";
 import { binColors, binShape, householdCountry, mailboxShape, type BinShape, type MailboxShape } from "../household.ts";
 import type { Floor } from "../model.ts";
+import { pushGate } from "./gate.ts";
 import { ALWAYS, DEG, EDGE_TOP, GeoBuffer, LineBuffer, pushLoft, pushLyingCyl, pushPrism, shade } from "./geo.ts";
 
 const C = {
@@ -557,6 +558,47 @@ function waterHeater(b: Builder, w: number, d: number, h: number, wall: boolean)
     b.cyl(Math.cos(a) * r * 0.7, Math.sin(a) * r * 0.7, 0.03, 0, 0.04, C.dark, C.dark, 6);
   }
   b.box(-r * 0.3, r * 0.3, h * 0.55, h * 0.65, r - 0.01, r + 0.01, C.dark);
+}
+
+/** A closed-chamber 3D printer frame: a base with its screen, four posts, a back panel and a lid, open to the sides so the print shows. */
+function printer3d(b: Builder, w: number, d: number, h: number): void {
+  const t = 0.024;
+  b.box(-w / 2, w / 2, 0, 0.08, -d / 2, d / 2, C.body, C.bodyTop, EDGE_FURN);
+  b.box(-w / 2 + 0.07, w / 2 - 0.07, 0.03, 0.064, d / 2, d / 2 + 0.004, C.dark);
+  for (const sx of [-1, 1])
+    for (const sz of [-1, 1]) b.box(sx < 0 ? -w / 2 : w / 2 - t, sx < 0 ? -w / 2 + t : w / 2, 0.08, h - 0.05, sz < 0 ? -d / 2 : d / 2 - t, sz < 0 ? -d / 2 + t : d / 2, C.metal, C.metal, EDGE_FURN);
+  b.box(-w / 2 + t, w / 2 - t, 0.08, h - 0.05, -d / 2, -d / 2 + 0.01, C.dark);
+  b.box(-w / 2, w / 2, h - 0.05, h, -d / 2, d / 2, C.white, C.whiteTop, EDGE_FURN);
+  // the outline of the glass door on the front
+  b.seg(-w / 2 + t, 0.09, d / 2, -w / 2 + t, h - 0.055, d / 2, EDGE_GLOW);
+  b.seg(w / 2 - t, 0.09, d / 2, w / 2 - t, h - 0.055, d / 2, EDGE_GLOW);
+}
+
+/** A built-in fireplace: the wall piece around a fire opening with a door frame, a hearth and logs. */
+function fireplace(b: Builder, w: number, d: number, h: number, f: Pick<Furniture, "w" | "d" | "h" | "fire_height" | "fire_y">): void {
+  const o = fireOpening({ w, d, h, fire_height: f.fire_height, fire_y: f.fire_y });
+  const front = d / 2;
+  // the wall around the opening, in four pieces, and the dark back of the opening
+  b.box(-w / 2, o.x0, 0, h, -d / 2, front, C.body, C.bodyTop, EDGE_FAINT);
+  b.box(o.x1, w / 2, 0, h, -d / 2, front, C.body, C.bodyTop, EDGE_FAINT);
+  b.box(o.x0, o.x1, 0, o.y0, -d / 2, front, C.body, C.bodyTop, EDGE_FAINT);
+  b.box(o.x0, o.x1, o.y1, h, -d / 2, front, C.body, C.bodyTop, EDGE_FAINT);
+  b.box(o.x0, o.x1, o.y0, o.y1, -d / 2, o.zBack, C.dark);
+  // a metal frame around the opening and a hearth in front
+  const t = 0.035;
+  b.box(o.x0 - t, o.x1 + t, o.y1, o.y1 + t, front, front + 0.02, C.metal, C.metal, EDGE_FURN);
+  b.box(o.x0 - t, o.x1 + t, o.y0 - t, o.y0, front, front + 0.02, C.metal, C.metal, EDGE_FURN);
+  b.box(o.x0 - t, o.x0, o.y0, o.y1, front, front + 0.02, C.metal, C.metal, EDGE_FURN);
+  b.box(o.x1, o.x1 + t, o.y0, o.y1, front, front + 0.02, C.metal, C.metal, EDGE_FURN);
+  b.box(o.x0 - 0.12, o.x1 + 0.12, 0, 0.025, front, front + 0.28, C.metal, C.metal, EDGE_FAINT);
+  // the glass door: a thin frame across the opening
+  const gz = front + 0.012;
+  b.seg(o.x0, (o.y0 + o.y1) / 2, gz, o.x1, (o.y0 + o.y1) / 2, gz, EDGE_FAINT);
+  b.seg(0, o.y0, gz, 0, o.y1, gz, EDGE_FAINT);
+  // two logs lying in the opening
+  const logY = o.y0 + 0.01;
+  b.lyingCyl("x", 0, o.zBack + 0.12, logY, logY + 0.09, (o.x1 - o.x0) * 0.7, 0.09, C.wood, C.woodTop, 8);
+  b.lyingCyl("x", 0, o.zBack + 0.26, logY, logY + 0.08, (o.x1 - o.x0) * 0.55, 0.08, C.wood, C.woodTop, 8);
 }
 
 /** A mailbox in its local shape. */
@@ -1689,6 +1731,18 @@ function buildFurniture(buf: GeoBuffer, lines: LineBuffer, shadow: GeoBuffer, f:
     }
     case "awning":
       // drawn with its moving fabric and arms by pushAwning (it runs in and out with its cover)
+      return;
+    case "printer_3d":
+      // the frame and the base; the moving head, the part and the lights are drawn by pushPrinter
+      printer3d(b, w, d, h);
+      break;
+    case "fireplace":
+      // the wall, the opening, the door frame and the logs; the flames are drawn by pushFlames while the fan is on
+      fireplace(b, w, d, h, f);
+      break;
+    case "gate":
+      // drawn with its moving leaves by pushGate; a picture (the library) shows it closed
+      if (still) pushGate(buf, f, base, 0);
       return;
     case "stove":
       stove(b, w, d, h);

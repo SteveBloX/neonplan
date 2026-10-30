@@ -210,6 +210,21 @@ export interface Furniture {
   awning_time?: number | null;
   /** Awning: the cover counts the other way round (100 = in). */
   awning_invert?: boolean;
+  /** Gate: a contact sensor that says whether it stands open (the cover, if any, is `entity`). */
+  gate_contact?: EntityRef;
+  /** Gate: the contact reports the other way round (on = closed). */
+  gate_contact_invert?: boolean;
+  /** Fireplace: height of the fire opening (null = 0.7 m) and of its lower edge above the floor (null = 0.4 m). */
+  fire_height?: number | null;
+  fire_y?: number | null;
+  /** 3D printer (`entity` is its print status sensor): progress (%), time left, nozzle and bed temperature, chamber light. null = found by the status sensor's name. */
+  printer_progress?: EntityRef;
+  printer_remaining?: EntityRef;
+  printer_nozzle?: EntityRef;
+  printer_bed?: EntityRef;
+  printer_light?: EntityRef;
+  /** Gate: its smart lock (lock.*) – a light on the post, blue while locked and amber while not. */
+  gate_lock?: EntityRef;
   /** Waste bin: what goes in (decides its usual colours and its words in the waste calendar; null = rest). */
   bin_kind?: "rest" | "bio" | "paper" | "plastic" | "glass" | "garden" | "recycling" | "other" | null;
   /** Waste bin: its body colour ("#rrggbb"; null = the usual one of its kind in the country). */
@@ -295,6 +310,8 @@ export interface Furniture {
   clients?: EntityRef;
   /** Water heater: a sensor with the water temperature (else the heater's own current temperature). */
   water_temp?: EntityRef;
+  /** Water heater: a sensor with how full the tank is (0–100 %): the tank shows its filling in 3D. */
+  water_fill?: EntityRef;
   /** Wall switch and socket (D523, D540, #593): one entry per gang – the entity it switches and, for a socket, its power sensor. */
   gangs?: Gang[] | null;
   /** Screens: pictures shown while an entity is in a state (first match wins; "*" = any state). */
@@ -525,8 +542,10 @@ export interface SolarField {
   align?: "left" | "center" | "right" | null;
   /** Modules left out, as "row:column" (row 0 at the eave). */
   skip?: string[] | null;
-  /** Look: full black (default) or classic blue. */
-  look?: "black" | "blue" | null;
+  /** Look: full black (default), classic blue, or "fill": black, each module filling from the eave with the share of its peak it makes. */
+  look?: "black" | "blue" | "fill" | null;
+  /** Power sensor of single modules, by cell ("row:column", row 0 at the eave); a module without one shows its share of the field's power. */
+  module_entities?: Record<string, string> | null;
   /** Module size in portrait, width × height in metres (null = 1.13 × 1.72). */
   module_w?: number | null;
   module_h?: number | null;
@@ -949,6 +968,8 @@ export interface OutdoorArea {
   rim?: number | null;
   /** Pool Pro: the pool's entities (water temperature, heat pump, filter pump, light, pH, chlorine, cover). */
   pool?: PoolLinks | null;
+  /** A pool that is a spa (free): its climate, its switches, the pump unit beside it and the water colours by temperature. */
+  spa?: SpaSettings | null;
   /** What a module keeps for this area, by the module's id. */
   mods?: ModuleData | null;
   /** Outdoor areas like rooms (#100): a name and a Home Assistant area – a tap opens it with its devices like a room. */
@@ -958,6 +979,27 @@ export interface OutdoorArea {
   panel?: string[];
   hidden?: string[];
   no_state?: string[];
+}
+
+/** A spa: the entities it shows and where its pump unit stands. A role left empty shows nothing. */
+export interface SpaSettings {
+  /** Its climate entity: the water temperature, the target and the heating mode (heat / off). */
+  climate?: EntityRef;
+  /** Four switches: bubbles, jets, filter pump and disinfection. */
+  bubbles?: EntityRef;
+  jets?: EntityRef;
+  filter?: EntityRef;
+  sanitizer?: EntityRef;
+  /** The pump unit stands beside the spa on this side (null = east), or exactly at unit_x / unit_z (plan, metres). */
+  unit_side?: "n" | "e" | "s" | "w" | null;
+  unit_x?: number | null;
+  unit_z?: number | null;
+  /** Its turn in degrees (null = its front faces away from the spa). */
+  unit_rotation?: number | null;
+  /** The water's colour by temperature: from each step's temperature (°C) on; null = the standard steps. */
+  colors?: { t: number; color: string }[] | null;
+  /** Blend between the steps (default) or change colour at each step. */
+  blend?: boolean;
 }
 
 /** Pool Pro: the entities of a pool; a role left empty is searched by name ("pool"), "none" switches it off. */
@@ -1310,6 +1352,9 @@ export const FURNITURE_TYPES = [
   "fridge_smart",
   "stairwell",
   "awning",
+  "gate",
+  "fireplace",
+  "printer_3d",
   "waste_bin",
   "mailbox",
   "wall_switch",
@@ -1322,14 +1367,14 @@ export const FURNITURE_TYPES = [
 /** Furniture library sections (the editor lists them in this order). */
 export const FURNITURE_GROUPS: Record<string, FurnitureType[]> = {
   lights: ["lamp_ceiling", "lamp_downlight", "lamp_spot", "lamp_panel", "lamp_pendant", "lamp_fan", "lamp_floor", "lamp_uplight", "lamp_table", "lamp_wall", "led_strip", "lamp_bollard", "lamp_garden"],
-  living: ["sofa", "sofa_l", "sofa_u", "armchair", "stool", "coffee_table", "tv_board", "tv_wall", "sideboard", "shelf", "plant", "rug"],
+  living: ["sofa", "sofa_l", "sofa_u", "armchair", "stool", "coffee_table", "tv_board", "tv_wall", "sideboard", "shelf", "fireplace", "plant", "rug"],
   dining: ["table", "table_round", "chair", "bench", "corner_bench", "bar_stool"],
   kitchen: ["kitchen", "kitchen_wall", "kitchen_tall", "island", "worktop", "sink", "stove", "dishwasher", "fridge"],
   sleeping: ["bed", "bunk_bed", "nightstand", "wardrobe", "dresser"],
   bath: ["bathtub", "shower", "wc", "washbasin", "washer", "dryer"],
-  work: ["desk", "worktop", "office_chair", "tall_cabinet", "coat_rack", "radiator", "ac_unit", "stairs", "stairs_u", "robot_vacuum"],
+  work: ["desk", "worktop", "office_chair", "tall_cabinet", "coat_rack", "radiator", "ac_unit", "stairs", "stairs_u", "robot_vacuum", "printer_3d"],
   vehicles: ["parking"],
-  outdoor: ["awning"],
+  outdoor: ["awning", "gate"],
   household: ["waste_bin", "mailbox"],
   switches: ["wall_switch", "wall_socket", "wifi_ap", "water_heater"],
 };
@@ -1573,6 +1618,9 @@ export const ELECTRIC_FURNITURE = new Set<string>([
   "radiator",
   "ac_unit",
   "awning",
+  "gate",
+  "fireplace",
+  "printer_3d",
   "robot_vacuum",
   "inverter",
   "home_battery",
@@ -1597,6 +1645,25 @@ export const ELECTRIC_FURNITURE = new Set<string>([
 ]);
 
 export type FurnitureType = (typeof FURNITURE_TYPES)[number];
+
+/** The fire opening of a built-in fireplace, in the item's local coordinates (x across, y up from the floor, z front = +d/2). */
+export function fireOpening(f: Pick<Furniture, "w" | "d" | "h" | "fire_height" | "fire_y">): { x0: number; x1: number; y0: number; y1: number; zBack: number; zFront: number } {
+  const w = Math.max(0.5, f.w);
+  const d = Math.max(0.1, f.d);
+  const h = Math.max(0.8, f.h);
+  const ow = Math.max(0.3, Math.min(w - 0.3, w * 0.55));
+  const fh = Math.max(0.3, Math.min(h - 0.4, f.fire_height ?? 0.7));
+  const fy = Math.max(0, Math.min(h - fh - 0.15, f.fire_y ?? 0.4));
+  return { x0: -ow / 2, x1: ow / 2, y0: fy, y1: fy + fh, zBack: -d / 2 + Math.min(0.08, d * 0.25), zFront: d / 2 };
+}
+
+/** Kinds of gate (`variant`): two leaves (default), one leaf, one leaf that slides along the fence. */
+export const GATE_KINDS = ["double", "single", "sliding"] as const;
+export type GateKind = (typeof GATE_KINDS)[number];
+
+export function gateKind(variant: string | null | undefined): GateKind {
+  return (GATE_KINDS as readonly string[]).includes(variant ?? "") ? (variant as GateKind) : "double";
+}
 
 /** Default size (width x, depth z, height) of new furniture in metres. */
 export const FURNITURE_SIZE: Record<FurnitureType, [number, number, number]> = {
@@ -1656,6 +1723,12 @@ export const FURNITURE_SIZE: Record<FurnitureType, [number, number, number]> = {
   ac_unit: [0.85, 0.22, 0.3],
   // width along the wall, the projection (how far it reaches out fully extended), the cassette
   awning: [3.0, 2.5, 0.22],
+  // a driveway gate between two posts (width with the posts, thickness of the posts, height of the leaves)
+  gate: [3.6, 0.2, 1.5],
+  // a built-in fireplace: the wall piece it sits in, as wide as it is thick and tall as the room
+  fireplace: [1.8, 0.4, 2.5],
+  // a closed-chamber printer (Bambu Lab P1S / X1C size)
+  printer_3d: [0.42, 0.44, 0.5],
   // a 240 l wheelie bin; a wall mailbox
   waste_bin: [0.58, 0.73, 1.07],
   mailbox: [0.38, 0.14, 0.34],

@@ -307,6 +307,12 @@ export function rowCounts(f: Pick<SolarField, "rows" | "cols" | "layout">): numb
   return Array.from({ length: Math.max(1, f.rows) }, () => Math.max(1, f.cols));
 }
 
+/** The cells ("row:column") of a field's modules, the ones switched off left out. */
+export function fieldCells(f: Pick<SolarField, "rows" | "cols" | "layout" | "skip">): string[] {
+  const skip = new Set(f.skip ?? []);
+  return rowCounts(f).flatMap((count, r) => Array.from({ length: count }, (_, c) => `${r}:${c}`)).filter((cell) => !skip.has(cell));
+}
+
 /** Tilt of a field's modules in radians: frames on flat ground (15° by default), away from a wall (0 by default). */
 function tiltOf(face: RoofFace, f: Pick<SolarField, "tilt">): number {
   if (face.flat) return Math.min(45, Math.max(0, f.tilt ?? 15)) * DEG;

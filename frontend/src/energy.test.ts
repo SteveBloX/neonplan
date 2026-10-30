@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { deviceSensors, energySummary, fieldPowers, findConsumers, flowColor, FLOW_COLORS, flowSegments, gridPoint, meterPosition, powerSensorFor, proposeEnergySensors, readPower, solarCurvePath, solarDayFromStats } from "./energy.ts";
+import { deviceSensors, energySummary, fieldPowers, moduleFills, modulePowers, fieldNow, findConsumers, flowColor, FLOW_COLORS, flowSegments, gridPoint, meterPosition, powerSensorFor, proposeEnergySensors, readPower, solarCurvePath, solarDayFromStats } from "./energy.ts";
 import { proposeField, roofFaces } from "./solar.ts";
 import type { Building, Room } from "./model.ts";
 import { emptyBuilding, newFloor } from "./model.ts";
@@ -358,4 +358,40 @@ test("two lights on one device each take their own meter: PowerCalc's by its nam
   );
   assert.equal(powerSensorFor(hass, "light.bad_decke"), "sensor.bad_decke_power");
   assert.equal(powerSensorFor(hass, "light.buero"), "sensor.buero_power_x");
+});
+
+test("fill look: a module with a sensor shows it, the others share the field's power, all as a share of the peak", () => {
+  const b = house();
+  b.settings.roof = { type: "gable", pitch: 35, overhang: 0.4 };
+  const face = roofFaces(b)[0];
+  b.settings.roof.solar = [
+    { ...proposeField(face, "a"), rows: 1, cols: 3, look: "fill", wp: 400, skip: ["0:2"], module_entities: { "0:0": "sensor.m1" } },
+    { ...proposeField(face, "b"), rows: 1, cols: 2, entity: "sensor.b" },
+  ];
+  const hass = hassWith([power("sensor.m1", "300"), power("sensor.b", "100")]);
+  const fills = moduleFills(hass, b, new Map([["a", 400], ["b", 100]]));
+  // the sensor of module 0:0 gives 300 / 400 W; module 0:1 takes half of the field's 400 W (two modules count, 0:2 is switched off)
+  assert.equal(fills.get("a|0:0"), 0.75);
+  assert.equal(fills.get("a|0:1"), 0.5);
+  assert.equal(fills.has("a|0:2"), false);
+  // fields with another look are left alone, and a peak is never exceeded
+  assert.equal(fills.has("b|0:0"), false);
+  b.settings.roof.solar[0].module_entities = { "0:1": "sensor.big" };
+  assert.equal(moduleFills(hassWith([power("sensor.big", "900")]), b, new Map()).get("a|0:1"), 1);
+});
+
+test("solar cards: a module's own sensor or its share, and a field's power from its module sensors", () => {
+  const b = house();
+  b.settings.roof = { type: "gable", pitch: 35, overhang: 0.4 };
+  const face = roofFaces(b)[0];
+  const field = { ...proposeField(face, "a"), rows: 1, cols: 2, wp: 400, module_entities: { "0:0": "sensor.m1", "0:1": "sensor.m2" } };
+  const hass = hassWith([power("sensor.m1", "300"), power("sensor.m2", "100", "W")]);
+  const m = modulePowers(hass, field, 0);
+  assert.deepEqual([m.get("0:0")?.w, m.get("0:0")?.own, m.get("0:1")?.w], [300, true, 100]);
+  // every module has a sensor: the field makes at least their sum, even without a sensor of its own
+  assert.equal(fieldNow(hass, field, 0), 400);
+  // a module without a sensor takes its share of the field's power
+  const half = modulePowers(hassWith([power("sensor.m1", "300")]), field, 500);
+  assert.deepEqual([half.get("0:1")?.own, half.get("0:1")?.w], [false, 250]);
+  assert.equal(fieldNow(hassWith([]), { ...field, module_entities: null }, 700), 700);
 });

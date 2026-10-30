@@ -83,6 +83,8 @@ export class Floorplan3dPanel extends LitElement {
     _selDevice: { state: true },
     _floorStack: { state: true },
     _roomNames: { state: true },
+    _solarTotal: { state: true },
+    _valuesTemp: { state: true },
     _controlsRight: { state: true },
     _keepView: { state: true },
     _angleLock: { state: true },
@@ -138,6 +140,8 @@ export class Floorplan3dPanel extends LitElement {
   /** Floors below an opened floor, and whether room names show (both kept per device). */
   private declare _floorStack: FloorStack;
   private declare _roomNames: boolean;
+  private declare _solarTotal: boolean;
+  private declare _valuesTemp: boolean;
   private declare _controlsRight: boolean;
   private declare _keepView: boolean;
   /** 3D lock on this device: the angle stays fixed. */
@@ -210,6 +214,8 @@ export class Floorplan3dPanel extends LitElement {
     const stack = prefs.get("floor_stack");
     this._floorStack = stack === "stacked" || stack === "single" ? stack : "dim";
     this._roomNames = prefs.get("room_names") !== "0";
+    this._solarTotal = prefs.get("solar_total") === "1";
+    this._valuesTemp = prefs.get("values_temp") === "1";
     this._controlsRight = prefs.get("controls") === "right";
     this._keepView = prefs.get("keep_view") === "1";
     this._angleLock = prefs.get("angle_lock") === "1";
@@ -969,6 +975,8 @@ export class Floorplan3dPanel extends LitElement {
           .packs=${this.data.packs}
           .floorStack=${this._floorStack}
           .roomLabels=${this._roomNames}
+          .solarTotal=${this._solarTotal}
+          .valuesTemp=${this._valuesTemp}
           .controlsRight=${this._controlsRight}
           .keepView=${this._keepView}
           .angleLock=${this._angleLock}
@@ -1090,6 +1098,30 @@ export class Floorplan3dPanel extends LitElement {
             }}
           >
             ${this.t("room_names_short")}
+          </button>
+          ${this._heat === "values"
+            ? html`<button
+                class="fp3d-chip"
+                aria-pressed=${this._valuesTemp}
+                title=${this.t("values_temp_hint")}
+                @click=${() => {
+                  this._valuesTemp = !this._valuesTemp;
+                  prefs.set("values_temp", this._valuesTemp ? "1" : "0");
+                }}
+              >
+                ${this.t("values_temp_short")}
+              </button>`
+            : nothing}
+          <button
+            class="fp3d-chip"
+            aria-pressed=${this._solarTotal}
+            title=${this.t("solar_total_hint")}
+            @click=${() => {
+              this._solarTotal = !this._solarTotal;
+              prefs.set("solar_total", this._solarTotal ? "1" : "0");
+            }}
+          >
+            ${this.t("solar_total_short")}
           </button>
           <button
             class="fp3d-chip"

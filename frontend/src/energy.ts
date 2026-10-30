@@ -8,7 +8,7 @@
 
 import { generateWalls } from "./geometry/walls.ts";
 import type { Building, CableRoute, EnergySettings, Floor, Furniture, Room, SolarField, Vec2 } from "./model.ts";
-import { fieldCenter, fieldFace, fieldSize, roofFaces, topFloor, wallFaces } from "./solar.ts";
+import { fieldCells, fieldCenter, fieldFace, fieldSize, roofFaces, topFloor, wallFaces } from "./solar.ts";
 import { entityAreaId, isHubDevice, powerSensorsOf } from "./devices.ts";
 import { pointInPolygon, signedArea } from "./model.ts";
 import type { HassEntity, HomeAssistant } from "./types.ts";
@@ -1087,6 +1087,42 @@ export function fieldLevels(building: Building, powers: ReadonlyMap<string, numb
     out.set(f.id, share > 0.003 ? Math.pow(share, 0.6) : 0);
   }
   return out;
+}
+
+/**
+ * The "fill" look: the share of its peak (0..1) every module makes, by `${field id}|${cell}`. A module with a sensor
+ * of its own shows that sensor; one without takes an equal part of its field's power.
+ */
+export function moduleFills(hass: HomeAssistant, building: Building, powers: ReadonlyMap<string, number>): Map<string, number> {
+  const out = new Map<string, number>();
+  for (const f of building.settings.roof.solar ?? []) {
+    if (f.look !== "fill") continue;
+    const peak = f.wp ?? MODULE_PEAK_W;
+    for (const [cell, m] of modulePowers(hass, f, powers.get(f.id) ?? 0)) out.set(`${f.id}|${cell}`, Math.min(1, Math.max(0, m.w / peak)));
+  }
+  return out;
+}
+
+/** Power (W) of every module of a field: its own sensor, else an equal part of the field's power (`own` tells which). */
+export function modulePowers(hass: HomeAssistant, f: SolarField, fieldW: number): Map<string, { w: number; own: boolean; sensor: string | null }> {
+  const cells = fieldCells(f);
+  const share = fieldW / Math.max(1, cells.length);
+  const out = new Map<string, { w: number; own: boolean; sensor: string | null }>();
+  for (const cell of cells) {
+    const id = f.module_entities?.[cell];
+    const sensor = id && id !== "none" ? id : null;
+    const own = sensor ? readPower(hass.states[sensor]) : null;
+    out.set(cell, own === null ? { w: share, own: false, sensor } : { w: Math.max(0, own), own: true, sensor });
+  }
+  return out;
+}
+
+/** What a field makes now: its power, or – when its modules have sensors of their own – at least the sum of them. */
+export function fieldNow(hass: HomeAssistant, f: SolarField, fieldW: number): number {
+  if (!f.module_entities) return fieldW;
+  let sum = 0;
+  for (const m of modulePowers(hass, f, 0).values()) if (m.own) sum += m.w;
+  return Math.max(fieldW, sum);
 }
 
 /** Power (W) of every solar field: its own sensor, else its string's sensor shared by modules, else the plant's. */

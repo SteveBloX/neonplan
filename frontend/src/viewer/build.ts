@@ -495,8 +495,9 @@ export function buildFloorGeometry(
       base = at.y;
     }
     pushFurniture(wallBuf, lines, shadow, f, base);
-    // a wardrobe or a stair reaching above the cut height is cut with the walls, so it hides nothing behind it
-    if (base + f.h > cut + 0.05) {
+    // a wardrobe or a stair reaching above the cut height is cut with the walls, so it hides nothing behind it;
+    // an air conditioner hangs entirely above the cut and stays in view (it is small and hides nothing)
+    if (base + f.h > cut + 0.05 && f.type !== "ac_unit") {
       cutAbove(wallBuf, start, cut, FURN_OFFSET);
       cutLinesAbove(lines, l0, cut, FURN_OFFSET);
     }

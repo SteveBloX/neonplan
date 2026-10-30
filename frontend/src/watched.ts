@@ -36,7 +36,9 @@ export function watchedEntities(hass: HomeAssistant, b: Building, w: WatchLinks)
   const lights = b.floors.flatMap((f) => f.rooms.flatMap((r) => areaEntities(hass, r.area_id).filter((id) => kindOf(id) === "light")));
   const furniture = [...w.furniture.values()].flatMap((l) => [l.entity, l.power]);
   const states = b.floors.flatMap((f) => f.furniture.flatMap((m) => [m.state_entity ?? null, m.state_entity2 ?? null, m.color_entity ?? null]));
-  const doors = b.floors.flatMap((f) => f.furniture.flatMap((m) => [m.door_left ?? null, m.door_right ?? null, m.soc ?? null, m.status ?? null, m.charge ?? null, m.export ?? null]));
+  const doors = b.floors.flatMap((f) => f.furniture.flatMap((m) => [m.door_left ?? null, m.door_right ?? null, m.gate_contact ?? null, m.printer_progress ?? null, m.printer_remaining ?? null, m.printer_nozzle ?? null, m.printer_bed ?? null, m.printer_light ?? null, m.water_fill ?? null, m.gate_lock ?? null, m.awning_position ?? null, m.soc ?? null, m.status ?? null, m.charge ?? null, m.export ?? null]));
+  // the entities of the pools that are spas
+  const spaIds = b.floors.flatMap((f) => (f.outdoor ?? []).flatMap((a) => (a.spa ? [a.spa.climate, a.spa.bubbles, a.spa.jets, a.spa.filter, a.spa.sanitizer] : [])));
   const roofWindowIds = (b.settings.roof?.windows ?? []).flatMap((x) => [x.cover, x.contact, x.tilt]).filter((x): x is string => !!x && x !== "none");
   // the solar fields' and strings' sensors feed the roof cables
   const solarIds = [...(b.settings.roof?.solar ?? []).map((f) => f.entity), ...(b.settings.roof?.strings ?? []).map((s) => s.entity)].filter((x): x is string => !!x && x !== "none");
@@ -48,6 +50,6 @@ export function watchedEntities(hass: HomeAssistant, b: Building, w: WatchLinks)
   // Haushalt Pro: the bins' calendars and sensors, the mailboxes' flaps and doors
   const household = hasFeature("household") ? [...b.floors.flatMap((f) => f.furniture.flatMap(householdEntities)), b.settings.household?.notes ?? null].filter((id): id is string => !!id && id !== "none") : [];
   const weather = weatherEntity(hass, w.weatherEntityId ?? b.settings.weather_entity);
-  const all = [...placed, ...cameraSensors, ...links, ...power, ...furniture, ...states, ...doors, ...robotRooms, ...roofWindowIds, ...solarIds, ...pictureRules, e.grid, e.solar, e.battery, e.battery_soc, e.consumption, e.tariff, ...presence, ...lights, ...heat, ...w.warnings, ...parking, ...motion, ...household, weather, "sun.sun"];
+  const all = [...spaIds, ...placed, ...cameraSensors, ...links, ...power, ...furniture, ...states, ...doors, ...robotRooms, ...roofWindowIds, ...solarIds, ...pictureRules, e.grid, e.solar, e.battery, e.battery_soc, e.consumption, e.tariff, ...presence, ...lights, ...heat, ...w.warnings, ...parking, ...motion, ...household, weather, "sun.sun"];
   return [...new Set(all.filter((id): id is string => !!id))];
 }

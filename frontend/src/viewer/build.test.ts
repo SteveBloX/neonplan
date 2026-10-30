@@ -140,6 +140,16 @@ test("a U-stair reaching the floor above cuts its opening there, like the straig
   assert.deepEqual(stairHoles([short, upper], upper), []);
 });
 
+test("an air conditioner hanging above the cut height stays in the cut view", () => {
+  const ac: Furniture = { id: "ac", type: "ac_unit", x: 2, z: 0.2, rotation: 0, w: 0.9, d: 0.25, h: 0.3, variant: null };
+  const floor = { ...floorWith([rect("a", 0, 0, 4, 3)], [], [ac]), height: 2.5, cut_height: 1.1 };
+  const geo = buildFloorGeometry(floor, EXT, INT);
+  const tris = geo.furnitureTris.find((t) => t.id === "ac")!;
+  assert.ok(tris.end > tris.start);
+  const fold = geo.walls.getAttribute("fold");
+  for (let v = tris.start * 3; v < tris.end * 3; v++) assert.equal(fold.getX(v), -1, `vertex ${v} folds away`);
+});
+
 function area2(poly: [number, number][]): number {
   let a = 0;
   for (let i = 0; i < poly.length; i++) {

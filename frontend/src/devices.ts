@@ -891,6 +891,9 @@ const FURNITURE_NAMES: Record<string, RegExp> = {
   radiator: /(heiz|radiator|thermostat|climate|hk|trv)/i,
   ac_unit: /(klima|air ?con|aircon|airco|split|\bac\b|clim)/i,
   awning: /(markise|awning|sonnensegel|beschattung|store|zonnescherm)/i,
+  gate: /(portail|portillon|\btor\b|hoftor|einfahrt|gartentor|gate|poort|port\b)/i,
+  printer_3d: /(print_status|3d|drucker|printer|imprimante|bambu)/i,
+  fireplace: /(kamin|ofen|cheminée|cheminee|poêle|poele|fireplace|fire|haard|kachel)/i,
 };
 const MEDIA_FURNITURE = new Set(["tv_board", "tv_wall"]);
 
@@ -944,6 +947,31 @@ export interface AwningState {
   moving: -1 | 0 | 1;
   /** Seconds for a full run (to move along while no position is reported). */
   time: number;
+  /** A gate's smart lock: true while it is unlocked (or unlatched), false while locked, absent without a lock. */
+  unlocked?: boolean;
+}
+
+/**
+ * A gate: how far it stands open (0 … 1). A cover's position (or a separate position sensor) wins, then a contact
+ * sensor, then the cover's own open / closed; a cover that is only opening or closing moves along at the run time.
+ */
+function gateState(hass: HomeAssistant, f: Furniture): AwningState {
+  const time = f.awning_time ?? 20;
+  const known = (id: EntityRef | undefined) => (id && id !== "none" && hass.states[id] && !isUnavailable(hass.states[id]) ? hass.states[id] : undefined);
+  const cover = known(f.entity);
+  const contact = known(f.gate_contact);
+  const lock = known(f.gate_lock);
+  const flip = (v: number) => (f.awning_invert ? 1 - v : v);
+  const unlocked = lock ? { unlocked: LOCK_OPEN_STATES.has(lock.state) } : {};
+  const live = livePosition(hass, f.awning_position && f.awning_position !== "none" ? f.awning_position : null);
+  const raw = cover?.attributes.current_position;
+  const moving: -1 | 0 | 1 = cover?.state === "opening" ? (f.awning_invert ? -1 : 1) : cover?.state === "closing" ? (f.awning_invert ? 1 : -1) : 0;
+  if (live !== null) return { out: flip(live), moving: 0, time, ...unlocked };
+  if (typeof raw === "number" && Number.isFinite(raw)) return { out: flip(Math.min(1, Math.max(0, raw / 100))), moving: 0, time, ...unlocked };
+  if (moving) return { out: null, moving, time, ...unlocked };
+  if (contact) return { out: (contact.state === "on" || contact.state === "open") !== !!f.gate_contact_invert ? 1 : 0, moving: 0, time, ...unlocked };
+  if (cover) return { out: flip(cover.state === "open" || cover.state === "on" ? 1 : 0), moving: 0, time, ...unlocked };
+  return { out: 0, moving: 0, time, ...unlocked };
 }
 
 /**
@@ -955,6 +983,10 @@ export function awningStates(hass: HomeAssistant, floors: readonly Floor[]): Map
   for (const floor of floors)
     for (const f of floor.furniture) {
       // a motorised curtain or roll-down screen from a pack follows its cover the same way (#511)
+      if (f.type === "gate") {
+        out.set(f.id, gateState(hass, f));
+        continue;
+      }
       if (f.type !== "awning" && !packMotion(f.type)) continue;
       const id = f.entity && f.entity !== "none" ? f.entity : null;
       const st = id ? hass.states[id] : undefined;
@@ -973,6 +1005,19 @@ export function awningStates(hass: HomeAssistant, floors: readonly Floor[]): Map
       else if (moving) out.set(f.id, { out: null, moving, time });
       // without a position: open (a cover) or on (a switch that drives it) is fully out
       else out.set(f.id, { out: flip(st.state === "open" || st.state === "on" ? 1 : 0), moving: 0, time });
+    }
+  return out;
+}
+
+/** Built-in fireplaces: whether the fire burns – while the entity of its fan (a fan, a switch) is on. */
+export function fireStates(hass: HomeAssistant, floors: readonly Floor[], links: ReadonlyMap<string, FurnitureLinks>): Map<string, boolean> {
+  const out = new Map<string, boolean>();
+  for (const floor of floors)
+    for (const f of floor.furniture) {
+      if (f.type !== "fireplace") continue;
+      const id = links.get(f.id)?.entity;
+      const st = id ? hass.states[id] : undefined;
+      out.set(f.id, !!st && !isUnavailable(st) && st.state === "on");
     }
   return out;
 }
@@ -1039,7 +1084,7 @@ export function furnitureEntities(hass: HomeAssistant, floors: readonly Floor[])
       // an awning hangs outside: the terrace or garden area it stands over counts as its room (#688)
       const room =
         floor.rooms.find((r) => r.points.length >= 3 && pointInPolygon([f.x, f.z], r.points)) ??
-        (f.type === "awning" ? outdoorZones(floor).find((z) => pointInPolygon([f.x, f.z], z.points)) : undefined);
+        (f.type === "awning" || f.type === "gate" ? outdoorZones(floor).find((z) => pointInPolygon([f.x, f.z], z.points)) : undefined);
       const ids = room ? primaryEntities(hass, areaEntities(hass, room.area_id)) : [];
       const name = (id: string) => `${id} ${entityName(hass, id)}`;
       let entity: string | null = f.entity === "none" ? null : (f.entity ?? null);
@@ -1065,6 +1110,12 @@ export function furnitureEntities(hass: HomeAssistant, floors: readonly Floor[])
         } else if (f.type === "awning") {
           // an awning runs on a cover (#688): one whose name says awning, else none (a roller blind is no awning)
           entity = free.find((id) => id.startsWith("cover.") && (pattern?.test(name(id)) || hass.states[id]?.attributes.device_class === "awning")) ?? null;
+        } else if (f.type === "printer_3d") {
+          // a printer's own status sensor (Bambu Lab: sensor.<printer>_print_status), found in the room's area
+          entity = free.find((id) => /^sensor\..*print_status$/.test(id)) ?? null;
+        } else if (f.type === "gate") {
+          // a gate runs on a cover of the class gate, or one whose name says gate (a garage door is no gate)
+          entity = free.find((id) => id.startsWith("cover.") && (hass.states[id]?.attributes.device_class === "gate" || (hass.states[id]?.attributes.device_class !== "garage" && pattern?.test(name(id))))) ?? null;
         } else if (pattern) {
           entity = free.find((id) => ["switch", "media", "fan"].includes(kindOf(id) ?? "") && pattern.test(name(id))) ?? null;
         }

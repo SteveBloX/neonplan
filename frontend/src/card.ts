@@ -9,6 +9,7 @@ import "./components/room-panel.ts";
 import "./components/view3d.ts";
 import { languageReady, loadLanguage, translate, type I18nKey } from "./i18n.ts";
 import { controls, tokens } from "./styles.ts";
+import { groundFloor } from "./solar.ts";
 import type { HomeAssistant } from "./types.ts";
 import type { CardConfig, CardControl } from "./card-config.ts";
 import { nightActive } from "./kiosk.ts";
@@ -38,6 +39,7 @@ export class Floorplan3dCard extends LitElement {
     _walls: { state: true },
     _heat: { state: true },
     _explode: { state: true },
+    _roomNames: { state: true },
     _fullscreen: { state: true },
     _pseudoFull: { state: true },
     _vh: { state: true },
@@ -59,6 +61,8 @@ export class Floorplan3dCard extends LitElement {
   private declare _walls: WallMode | null;
   private declare _heat: HeatMode | null;
   private declare _explode: boolean | null;
+  /** Room names switched on or off with the card's chip (null: as configured by room_names). */
+  private declare _roomNames: boolean | null;
   private declare _fullscreen: boolean;
   /** Full screen made by the card itself (no Fullscreen API): spread over the page. */
   private declare _pseudoFull: boolean;
@@ -75,6 +79,17 @@ export class Floorplan3dCard extends LitElement {
   private idleTimer: ReturnType<typeof setTimeout> | undefined;
   private nightTimer: ReturnType<typeof setInterval> | undefined;
 
+  /** The plan view's camera, kept while its angle and turn stay the same (a new object would turn the view again). */
+  private planCache: { key: string; view: { theta: number; phi: number } } | null = null;
+
+  private planOf(c: CardConfig | undefined): { theta: number; phi: number } | null {
+    if (!c?.plan_view) return null;
+    const key = `${c.plan_angle ?? 0}/${c.plan_rotation ?? 0}`;
+    // straight above is as flat as the view goes (a little tilt is kept so the walls still show)
+    if (this.planCache?.key !== key) this.planCache = { key, view: { theta: ((c.plan_rotation ?? 0) * Math.PI) / 180, phi: Math.max(0.12, ((c.plan_angle ?? 0) * Math.PI) / 180) } };
+    return this.planCache.view;
+  }
+
   private readonly data = new BuildingController(this);
   /** Time travel (Pro, card option time_travel): the last 24 hours replayed, read-only. */
   private readonly tt = new TimeTravel(this);
@@ -86,6 +101,7 @@ export class Floorplan3dCard extends LitElement {
     this._walls = savedWalls();
     this._heat = null;
     this._explode = null;
+    this._roomNames = null;
     this._fullscreen = false;
     this._pseudoFull = false;
     this._vh = window.innerHeight;
@@ -321,7 +337,10 @@ clearTimeout(this.cleanTimer);
       if (b.floors.some((f) => zonesOf(f).some((r) => r.id === c.room))) this._roomId = c.room;
     }
     // the configured floor is where the card starts; with floor pictures the user can switch
-    const floorId = this.currentFloor();
+    // the plan view shows one floor like a floor plan: the ground floor unless one was chosen
+    const plan = c?.plan_view === true;
+    const planDefault = plan && this._floorId === undefined && !c?.floor && (b?.floors.length ?? 0) > 1 && b ? (groundFloor(b)?.id ?? null) : null;
+    const floorId = planDefault ?? this.currentFloor();
     // the floor pictures have a house button of their own; a room with its panel has a close button
     const canGoBack =
       (!!this._roomId && c?.room_panel === false) || (!this.thumbs && this.canSwitch && !this._roomId && !!floorId && (b?.floors.length ?? 0) > 1);
@@ -330,6 +349,9 @@ clearTimeout(this.cleanTimer);
     const walls = this._walls ?? c?.walls ?? "auto";
     const heat = this._heat ?? c?.heatmap ?? "none";
     const explode = this._explode ?? c?.explode ?? true;
+    const roomNames = this._roomNames ?? c?.room_names !== false;
+    // the chip for the room names: listed in the controls, and always in full screen
+    const namesChip = shows("room_names") || this._fullscreen;
     // full screen, the screen below the dashboard header, or a fixed height
     // full screen takes the whole screen by CSS (a measured height went stale on some screens, #426); "fill"
     // reaches the bottom edge exactly: the card's 1 px border above and below is all that is left (#344)
@@ -341,7 +363,7 @@ clearTimeout(this.cleanTimer);
           : "calc(100vh - var(--header-height, 56px) - 2px)"
         : `${height}px`;
     // the bar of switches at the bottom (the back button belongs to it)
-    const bar = !!b && !this._clean && (canGoBack || ((!!c?.controls || !!c?.time_travel) && !(this._roomId && c.room_panel !== false)));
+    const bar = !!b && !this._clean && (canGoBack || ((!!c?.controls || !!c?.time_travel || namesChip) && !(this._roomId && c.room_panel !== false)));
     const tt = this.tt.active;
     const eye = c?.controls_hidden !== undefined || (c?.controls_hide_after ?? 0) > 0;
     const t = (k: Parameters<typeof translate>[1]) => translate(this.hass, k);
@@ -356,13 +378,16 @@ clearTimeout(this.cleanTimer);
               .packs=${this.data.packs}
               .floorId=${floorId}
               .roomId=${this._roomId}
-              .wallMode=${walls}
-              .explode=${explode}
+              .wallMode=${plan ? "cut" : walls}
+              .explode=${plan ? false : explode}
               .keepRoof=${c?.roof_fade === false}
+              .planView=${this.planOf(c)}
+              .valuesTemp=${c?.room_values === "temperature"}
+              .solarTotal=${c?.solar_total === true}
               .hideRoof=${c?.roof === false}
               .quality=${this._config?.quality ?? "auto"}
               ?showStats=${this._config?.stats ?? false}
-              .markerMode=${this._config?.markers ?? "important"}
+              .markerMode=${plan ? "all" : (this._config?.markers ?? "important")}
               .pinSize=${this._config?.marker_size ?? "normal"}
               .markerNames=${this._config?.marker_names === true}
               .central=${this._config?.central !== false}
@@ -370,7 +395,7 @@ clearTimeout(this.cleanTimer);
               .petsOn=${this._config?.pets !== false}
               .ghostOn=${this._config?.ghost !== false}
               .buttons=${this._config?.buttons?.map((b, i) => ({ id: `card_${i}`, ...b })) ?? null}
-              .heatMode=${heat}
+              .heatMode=${plan && heat === "none" ? "values" : heat}
               .theme=${this._config?.theme ?? "neon"}
               .clock=${this._config?.clock ?? null}
               .accent=${this._config?.accent ?? null}
@@ -378,10 +403,10 @@ clearTimeout(this.cleanTimer);
               .flows=${this._config?.flows ?? null}
               .holograms=${this._config?.holograms ?? null}
               .floorThumbs=${this.thumbs}
-              .roomLabels=${c?.room_names !== false}
+              .roomLabels=${roomNames}
               .controlsRight=${c?.controls_side === "right"}
               .keepView=${c?.keep_view === true}
-              .angleLock=${c?.angle_lock === true}
+              .angleLock=${c?.angle_lock === true || plan}
               .floorStack=${c?.floor_stack ?? "dim"}
               .panelOpen=${!!this._roomId && c?.room_panel !== false}
               .alerts=${c?.alerts !== false}
@@ -451,6 +476,7 @@ clearTimeout(this.cleanTimer);
                   </button>`
                 : nothing}
               ${c?.camera_wall ? html`<button class="fp3d-chip" aria-pressed=${this._cameraWall} title=${t("camera_wall_hint")} @click=${() => (this._cameraWall = !this._cameraWall)}>${t("cameras_short")}</button>` : nothing}
+              ${namesChip ? html`<button class="fp3d-chip" aria-pressed=${roomNames} @click=${() => (this._roomNames = !roomNames)}>${t("room_names_short")}</button>` : nothing}
               ${shows("walls")
                 ? html`<div class="fp3d-seg">
                     <button aria-pressed=${walls === "auto"} @click=${() => this.setWalls("auto")}>${t("walls_auto")}</button>

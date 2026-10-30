@@ -73,6 +73,15 @@ export interface CardConfig {
   controls_hidden?: boolean;
   /** Hide every bar and overlay after this many seconds without a touch; a touch shows them again. */
   controls_hide_after?: number;
+  /** On the roof only the whole plant's solar power in one card, instead of a card per field. */
+  solar_total?: boolean;
+  /** The plan view: the house seen from above without its roof, like a floor plan, with every device's icon and the room temperatures. */
+  plan_view?: boolean;
+  /** Plan view: how far the view tilts from straight above, in degrees (0–70, default 0), and which way it turns (0–359°). */
+  plan_angle?: number;
+  plan_rotation?: number;
+  /** What the "values" view shows next to the rooms: everything found (default) or only the temperature. */
+  room_values?: "all" | "temperature";
   /** Room names in 3D (default true). */
   room_names?: boolean;
   /** An opened floor with the floors below it dimmed (default), stacked, or on its own. */
@@ -118,5 +127,5 @@ export interface CardConfig {
   idle_orbit?: boolean;
 }
 
-export const CARD_CONTROLS = ["walls", "floors", "temperature", "humidity", "co2"] as const;
+export const CARD_CONTROLS = ["walls", "floors", "temperature", "humidity", "co2", "room_names"] as const;
 export type CardControl = (typeof CARD_CONTROLS)[number];

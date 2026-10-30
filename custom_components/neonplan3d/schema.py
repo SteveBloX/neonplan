@@ -296,6 +296,19 @@ FURNITURE_SCHEMA = vol.Schema(
         vol.Optional("awning_position", default=None): vol.Any(None, vol.All(str, vol.Length(max=255))),
         vol.Optional("awning_time", default=None): vol.Any(None, vol.All(vol.Coerce(float), vol.Range(min=2, max=300))),
         vol.Optional("awning_invert", default=False): bool,
+        # gate: a contact sensor (open / closed), whether it reports the other way round, its smart lock
+        vol.Optional("gate_contact"): vol.Any(None, vol.All(str, vol.Length(max=255))),
+        vol.Optional("gate_contact_invert"): bool,
+        vol.Optional("gate_lock"): vol.Any(None, vol.All(str, vol.Length(max=255))),
+        # built-in fireplace: height of the fire opening and of its lower edge above the floor (metres)
+        vol.Optional("fire_height"): vol.Any(None, vol.All(vol.Coerce(float), vol.Range(min=0.3, max=3))),
+        # 3D printer: progress, time left, nozzle and bed temperature, chamber light (None = found by the status sensor's name)
+        vol.Optional("printer_progress"): vol.Any(None, vol.All(str, vol.Length(max=255))),
+        vol.Optional("printer_remaining"): vol.Any(None, vol.All(str, vol.Length(max=255))),
+        vol.Optional("printer_nozzle"): vol.Any(None, vol.All(str, vol.Length(max=255))),
+        vol.Optional("printer_bed"): vol.Any(None, vol.All(str, vol.Length(max=255))),
+        vol.Optional("printer_light"): vol.Any(None, vol.All(str, vol.Length(max=255))),
+        vol.Optional("fire_y"): vol.Any(None, vol.All(vol.Coerce(float), vol.Range(min=0, max=3))),
         # household: a waste bin's kind and colours, its calendar (Haushalt Pro); a mailbox's emptying door
         vol.Optional("bin_kind"): vol.Any(None, vol.In(WASTE_KINDS)),
         vol.Optional("bin_color"): vol.Any(None, vol.Match(r"^#[0-9a-fA-F]{6}$")),
@@ -321,6 +334,8 @@ FURNITURE_SCHEMA = vol.Schema(
         # access point: its clients sensor; water heater: its water temperature
         vol.Optional("clients"): vol.Any(None, vol.All(str, vol.Length(max=255))),
         vol.Optional("water_temp"): vol.Any(None, vol.All(str, vol.Length(max=255))),
+        # water heater: a sensor with how full the tank is (percent)
+        vol.Optional("water_fill"): vol.Any(None, vol.All(str, vol.Length(max=255))),
         # wall switch and socket: one entry per gang (its entity, a socket's power sensor)
         vol.Optional("gangs"): vol.Any(
             None,
@@ -487,6 +502,40 @@ POOL_SCHEMA = vol.Schema(
     extra=vol.ALLOW_EXTRA,
 )
 
+# a pool used as a spa: its climate, four switches, the pump unit beside it and the water colours by temperature
+_SPA_ENTITY = vol.Any(None, vol.All(str, vol.Length(max=255)))
+SPA_SCHEMA = vol.Schema(
+    {
+        vol.Optional("climate", default=None): _SPA_ENTITY,
+        vol.Optional("bubbles", default=None): _SPA_ENTITY,
+        vol.Optional("jets", default=None): _SPA_ENTITY,
+        vol.Optional("filter", default=None): _SPA_ENTITY,
+        vol.Optional("sanitizer", default=None): _SPA_ENTITY,
+        # the pump unit: the side of the spa it stands on, or an exact place and turn (None = beside the spa)
+        vol.Optional("unit_side", default=None): vol.Any(None, vol.In(["n", "e", "s", "w"])),
+        vol.Optional("unit_x", default=None): vol.Any(None, vol.All(vol.Coerce(float), vol.Range(min=-200, max=200))),
+        vol.Optional("unit_z", default=None): vol.Any(None, vol.All(vol.Coerce(float), vol.Range(min=-200, max=200))),
+        vol.Optional("unit_rotation", default=None): vol.Any(None, vol.All(vol.Coerce(float), vol.Range(min=-360, max=360))),
+        # water colour steps: from this temperature (degrees) on, ordered by temperature; blended between steps or not
+        vol.Optional("colors", default=None): vol.Any(
+            None,
+            vol.All(
+                [
+                    vol.Schema(
+                        {
+                            vol.Required("t"): vol.All(vol.Coerce(float), vol.Range(min=-20, max=100)),
+                            vol.Required("color"): vol.Match(r"^#[0-9a-fA-F]{6}$"),
+                        }
+                    )
+                ],
+                vol.Length(max=12),
+            ),
+        ),
+        vol.Optional("blend", default=True): bool,
+    },
+    extra=vol.ALLOW_EXTRA,
+)
+
 OUTDOOR_TYPES = ["lawn", "terrace", "path", "driveway", "pool", "bed", "wild", "hedge", "fence", "pergola", "balcony"]
 
 OUTDOOR_SCHEMA = vol.Schema(
@@ -517,6 +566,8 @@ OUTDOOR_SCHEMA = vol.Schema(
         vol.Optional("rim", default=None): vol.Any(None, vol.All(vol.Coerce(float), vol.Range(min=-0.5, max=2))),
         # Pool Pro: the pool's entities
         vol.Optional("pool", default=None): vol.Any(None, POOL_SCHEMA),
+        # a pool that is a spa: temperature, bubbles, jets, filter, sanitizer and the pump unit
+        vol.Optional("spa", default=None): vol.Any(None, SPA_SCHEMA),
         # an outdoor area like a room (#100): its name and Home Assistant area
         vol.Optional("name", default=None): vol.Any(None, vol.All(str, vol.Length(max=80))),
         vol.Optional("area_id", default=None): vol.Any(None, vol.All(str, vol.Length(max=255))),
@@ -592,7 +643,15 @@ SOLAR_FIELD_SCHEMA = vol.Schema(
         vol.Optional("skip", default=None): vol.Any(
             None, vol.All([vol.All(str, vol.Length(max=12))], vol.Length(max=2400))
         ),
-        vol.Optional("look", default=None): vol.Any(None, vol.In(["black", "blue"])),
+        vol.Optional("look", default=None): vol.Any(None, vol.In(["black", "blue", "fill"])),
+        # power sensor of single modules ("row:column" -> entity id)
+        vol.Optional("module_entities", default=None): vol.Any(
+            None,
+            vol.All(
+                {vol.All(str, vol.Length(max=12)): vol.All(str, vol.Length(max=255))},
+                vol.Length(max=2400),
+            ),
+        ),
         # module size in portrait (None = 1.13 x 1.72 m) and the string the field belongs to
         vol.Optional("module_w", default=None): vol.Any(None, vol.All(vol.Coerce(float), vol.Range(min=0.3, max=3))),
         vol.Optional("module_h", default=None): vol.Any(None, vol.All(vol.Coerce(float), vol.Range(min=0.3, max=3))),

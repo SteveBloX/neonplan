@@ -5,6 +5,7 @@
   "scripts": {
     "build": "node build.mjs",
     "watch": "node build.mjs --watch",
+    "dev": "node ../scripts/dev.mjs",
     "test": "node --test \"src/**/*.test.ts\"",
     "typecheck": "tsc --noEmit",
     "screenshot": "node screenshot.mjs",
