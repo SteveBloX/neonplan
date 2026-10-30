@@ -10,6 +10,7 @@ const ICONS: Record<DeviceKind, string> = {
   climate: "M12 14.5V5a2 2 0 1 0-4 0v9.5a4 4 0 1 0 4 0zM10 11v6M16 6h4M16 10h3",
   media: "M4 6h16v10H4zM9 20h6M12 16v4M10.5 8.8v4.4l3.8-2.2z",
   lock: "M6 11h12v9H6zM8.5 11V8a3.5 3.5 0 0 1 7 0v3M12 14.5v2",
+  alarm: "M12 3l7 3v5c0 4.5-3 8.2-7 10-4-1.8-7-5.5-7-10V6zM9.5 12l2 2 3.5-4",
   sensor: "M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM12 7v5l3 2",
   binary: "M5 21V4h11v17M16 21H4M8 21V7h5v14M12.5 13.5h.01",
   camera: "M4 7h11v10H4zM15 10.5l5-3v9l-5-3",

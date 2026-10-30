@@ -270,6 +270,17 @@ export function pushOutdoor(buf: GeoBuffer, lines: LineBuffer, floor: Floor, wat
             pushBeam(buf, p, q, 0.06, topP - 0.04, topP + 0.08, look.side, look.color, groundAt(q[0], q[1]) - groundAt(p[0], p[1]));
           }
         }
+        // transparent plates on top of the rafters, in the see-through layer so the terrace shows through
+        if (a.glazed && water) {
+          const plate = new Color(0xa8e4ff);
+          const y = (x: number, z: number) => groundAt(x, z) + h + 0.09;
+          for (const [i, j, k] of triangulate(poly)) {
+            const p = poly[i];
+            const q = poly[j];
+            const r = poly[k];
+            water.tri([p[0], y(p[0], p[1]), p[1]], [r[0], y(r[0], r[1]), r[1]], [q[0], y(q[0], q[1]), q[1]], plate, plate, plate, undefined, ALWAYS);
+          }
+        }
         outline((x, z) => groundAt(x, z) + h + 0.004);
         break;
       }

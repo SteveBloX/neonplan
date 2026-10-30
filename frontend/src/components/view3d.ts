@@ -5891,12 +5891,13 @@ export class Fp3dView3d extends LitElement {
     // an own background (colour, gradient, picture) replaces the look's sky
     const own = backdropCss(this.building?.settings.backdrop);
     const pinK = this.pinSize === "small" ? 0.8 : this.pinSize === "large" ? 1.25 : 1;
-    const style = `--fp3d-pin-k:${pinK};--fp3d-sky:${mix(stage.night[0], stage.day[0])};--fp3d-ground:${mix(stage.night[1], stage.day[1])}${own ? `;background:${own}` : ""}`;
+    // the solar cards sit on the roof, all at once: on a narrow stage (a phone) they shrink so they leave the roof visible
+    const style = `--fp3d-pin-k:${pinK};--fp3d-solar-k:${this._narrowStage ? 0.68 : 1};--fp3d-sky:${mix(stage.night[0], stage.day[0])};--fp3d-ground:${mix(stage.night[1], stage.day[1])}${own ? `;background:${own}` : ""}`;
     return html`<div
       @touchstart=${this.keepTouch}
       @touchmove=${this.keepTouch}
       @touchend=${this.keepTouch}
-      class="fp3d-stage ${this.roomLabels ? "" : "fp3d-no-room-names"} ${this._low ? "fp3d-low" : ""} ${this.panelOpen ? "fp3d-panel-open" : ""} ${this.controlsRight ? "fp3d-side-right" : ""} ${this._alerts.length ? "fp3d-has-alerts" : ""} ${this._through ? "fp3d-through-on" : ""} ${this._flash ? "fp3d-flash" : ""} ${this.replay ? "fp3d-replay" : ""}"
+      class="fp3d-stage ${this._narrowStage ? "fp3d-narrow" : ""} ${this.roomLabels ? "" : "fp3d-no-room-names"}${this._low ? "fp3d-low" : ""} ${this.panelOpen ? "fp3d-panel-open" : ""} ${this.controlsRight ? "fp3d-side-right" : ""} ${this._alerts.length ? "fp3d-has-alerts" : ""} ${this._through ? "fp3d-through-on" : ""} ${this._flash ? "fp3d-flash" : ""} ${this.replay ? "fp3d-replay" : ""}"
       style=${style}
     >
       ${this._error ? html`<p class="fp3d-error">${this._error}</p>` : nothing} ${this.clean ? nothing : this.renderEnergy()} ${this.renderHologram()} ${this.clean ? nothing : this.renderLegend()}
@@ -5931,8 +5932,8 @@ export class Fp3dView3d extends LitElement {
       /* a solar field's card (and a tapped module's): a dark plate with large type, readable over the roof from afar */
       .fp3d-holo.fp3d-holo-solar {
         width: auto;
-        min-width: 190px;
-        padding: 10px 14px 11px;
+        min-width: calc(190px * var(--fp3d-solar-k, 1));
+        padding: calc(10px * var(--fp3d-solar-k, 1)) calc(14px * var(--fp3d-solar-k, 1)) calc(11px * var(--fp3d-solar-k, 1));
         border-radius: 12px;
         background: rgba(9, 13, 22, 0.94);
         backdrop-filter: none;
@@ -5954,7 +5955,7 @@ export class Fp3dView3d extends LitElement {
         align-items: center;
         justify-content: space-between;
         gap: 12px;
-        font: 700 15px var(--fp3d-title-font);
+        font: 700 calc(15px * var(--fp3d-solar-k, 1)) var(--fp3d-title-font);
         color: #ffffff;
         white-space: nowrap;
       }
@@ -6025,14 +6026,14 @@ export class Fp3dView3d extends LitElement {
         white-space: nowrap;
       }
       .fp3d-holo-solar-big b {
-        font-size: 26px;
+        font-size: calc(26px * var(--fp3d-solar-k, 1));
         font-weight: 700;
         line-height: 1.1;
         color: #ffd27a;
         font-variant-numeric: tabular-nums;
       }
       .fp3d-holo-solar-big span {
-        font-size: 14px;
+        font-size: calc(14px * var(--fp3d-solar-k, 1));
         color: #dfe5f0;
       }
       .fp3d-holo-solar .fp3d-holo-bar {
@@ -6047,8 +6048,17 @@ export class Fp3dView3d extends LitElement {
         border-radius: 4px;
         background: linear-gradient(90deg, #ff9a2e, #ffd27a);
       }
+      /* on a phone the field cards keep their name and power only (the bar, the peak and the share would cover the roof) */
+      .fp3d-narrow .fp3d-holo-solar:not(.fp3d-holo-solar-one) .fp3d-holo-bar,
+      .fp3d-narrow .fp3d-holo-solar:not(.fp3d-holo-solar-one) .fp3d-holo-solar-sub,
+      .fp3d-narrow .fp3d-holo-solar:not(.fp3d-holo-solar-one) .fp3d-holo-solar-big span {
+        display: none;
+      }
+      .fp3d-narrow .fp3d-holo.fp3d-holo-solar:not(.fp3d-holo-solar-one) {
+        min-width: 0;
+      }
       .fp3d-holo-solar-sub {
-        font-size: 13px;
+        font-size: calc(13px * var(--fp3d-solar-k, 1));
         line-height: 1.3;
         color: #cfd7e6;
         white-space: nowrap;

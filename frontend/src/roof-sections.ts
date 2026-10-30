@@ -93,6 +93,90 @@ export function sectionProfile(s: Pick<RoofSection, "x0" | "z0" | "x1" | "z1" | 
   return { vr, rh, y: (v) => (v <= vr ? ea + v * ta : eb + (w - v) * tb) };
 }
 
+/**
+ * The pitches that put the ridge of section `s` on the ridge of `target` (same axis, not turned): the same line in
+ * the plan and the same height, the eaves kept. A wider or narrower wing then keeps one continuous ridge, its two
+ * slopes just differ. Null when that is impossible (other axis, turned, a ridge below an eave).
+ */
+export function alignRidge(s: RoofSection, target: RoofSection): Pick<RoofSection, "pitch_a" | "pitch_b"> | null {
+  const sloped = (x: RoofSection) => x.shape === "gable" || x.shape === "hip" || x.shape === "halfhip";
+  if (!sloped(s) || !sloped(target) || s.axis !== target.axis || sectionTurn(s) || sectionTurn(target)) return null;
+  const across = (p: Vec2) => (s.axis === "z" ? p[0] : p[1]);
+  const tf = sectionFrame(target);
+  const tp = sectionProfile(target);
+  const sf = sectionFrame(s);
+  const vr = Math.abs(across(tf.at(tf.u0, tp.vr)) - across(sf.at(sf.u0, 0)));
+  const rh = tp.rh;
+  if (vr < 0.05 || sf.w - vr < 0.05 || rh <= Math.max(s.eave_a, s.eave_b) + 0.05) return null;
+  const deg = (rise: number, run: number) => Math.round((Math.atan2(rise, run) / DEG) * 10) / 10;
+  return { pitch_a: Math.min(75, deg(rh - s.eave_a, vr)), pitch_b: Math.min(75, deg(rh - s.eave_b, sf.w - vr)) };
+}
+
+/** A small sloping triangle joining two sections of one continuous ridge (see bridgeFacets): corners as x, y (height), z. */
+export interface BridgeFacet {
+  /** The wider section that asked for it. */
+  section: string;
+  pts: [[number, number, number], [number, number, number], [number, number, number]];
+}
+
+/**
+ * The small slopes of wider sections (their `bridge` length): where a section reaches out further than the narrower
+ * one it touches along the same ridge (same line, same height), a triangle runs from the ridge at the joint down
+ * to the eave corner of the wider one, and back over the narrower one to its own eave – so the two roofs meet in a
+ * slope, not in a step. One triangle per side that reaches out more than 30 cm (less is no step worth a slope).
+ * `ovOf` gives a section's overhang.
+ */
+export function bridgeFacets(sections: readonly RoofSection[], ovOf: (s: RoofSection) => SectionOverhang): BridgeFacet[] {
+  const sloped = (x: RoofSection) => !x.open && !x.dormer && (x.shape === "gable" || x.shape === "hip" || x.shape === "halfhip") && !sectionTurn(x);
+  const out: BridgeFacet[] = [];
+  for (const wide of sections) {
+    if (!sloped(wide) || !((wide.bridge ?? 0) > 0.05)) continue;
+    const fw = sectionFrame(wide);
+    const pw = sectionProfile(wide);
+    const ow = ovOf(wide);
+    const across = (x: RoofSection, p: Vec2) => (x.axis === "z" ? p[0] : p[1]);
+    for (const narrow of sections) {
+      if (narrow === wide || !sloped(narrow) || narrow.axis !== wide.axis) continue;
+      const fn = sectionFrame(narrow);
+      const pn = sectionProfile(narrow);
+      // the joint: the narrower one ends where the wider one begins (end 0), or begins where it ends (end 1)
+      const end = Math.abs(fn.u1 - fw.u0) < 0.05 ? 0 : Math.abs(fn.u0 - fw.u1) < 0.05 ? 1 : null;
+      if (end === null) continue;
+      const joint = end === 0 ? fw.u0 : fw.u1;
+      // one ridge: the same line across, the same height
+      const ridge = across(wide, fw.at(joint, pw.vr));
+      if (Math.abs(ridge - across(narrow, fn.at(joint, pn.vr))) > 0.06 || Math.abs(pw.rh - pn.rh) > 0.06) continue;
+      const on = ovOf(narrow);
+      // each outer eave (with its overhang) as the cross coordinate it lies at and the v it has in its section's frame
+      const edges = (x: RoofSection, f: SectionFrame, o: SectionOverhang) =>
+        [-Math.max(0, o.a), f.w + Math.max(0, o.b)].map((v) => ({ v, c: across(x, f.at(joint, v)) })).sort((p, q) => p.c - q.c);
+      const ew = edges(wide, fw, ow);
+      const en = edges(narrow, fn, on);
+      const run = Math.max(0.1, Math.min(wide.bridge!, Math.abs(fn.u1 - fn.u0) - 0.1));
+      const ua = joint + (end === 0 ? -run : run);
+      // the lower side (smaller cross coordinate) and the upper one
+      for (const side of [0, 1] as const) {
+        const reach = side === 0 ? en[0].c - ew[0].c : ew[1].c - en[1].c;
+        if (reach < 0.3) continue;
+        const cw = ew[side === 0 ? 0 : 1];
+        const cn = en[side === 0 ? 0 : 1];
+        const [rx, rz] = fw.at(joint, pw.vr);
+        const [bx, bz] = fw.at(joint, cw.v);
+        const [ax, az] = fn.at(ua, cn.v);
+        out.push({
+          section: wide.id,
+          pts: [
+            [rx, pw.rh, rz],
+            [bx, pw.y(cw.v), bz],
+            [ax, pn.y(cn.v), az],
+          ],
+        });
+      }
+    }
+  }
+  return out;
+}
+
 /** Anything that carries roof sections: a building, or just its settings in a test. */
 export type RoofHolder = { settings: { roof: { type?: string; sections?: readonly RoofSection[] | null; overhang?: number } } };
 

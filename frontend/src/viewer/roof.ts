@@ -6,7 +6,7 @@
 import { Color } from "three";
 import type { Building, Floor, RoofSection, SolarField, Vec2 } from "../model.ts";
 import { polygonArea } from "../model.ts";
-import { coversIn, cutHole, cutUnder, lineOutside, meetLine, sectionCovers, sectionFloor, sectionsCut, dormerHoles, dormerParent, effectiveDormer, offsetPolygon, sectionGeometry, sectionHeightAt, sectionPolygon, sectionFrame, sectionOverhang, sectionProfile, sectionUV, wingJunction, wingSection, type LocalCover, type Q, type SectionOverhang } from "../roof-sections.ts";
+import { bridgeFacets, coversIn, cutHole, cutUnder, lineOutside, meetLine, sectionCovers, sectionFloor, sectionsCut, dormerHoles, dormerParent, effectiveDormer, offsetPolygon, sectionGeometry, sectionHeightAt, sectionPolygon, sectionFrame, sectionOverhang, sectionProfile, sectionUV, wingJunction, wingSection, type LocalCover, type Q, type SectionOverhang } from "../roof-sections.ts";
 import { DEG, GeoBuffer, LineBuffer, pushPrism, shade } from "./geo.ts";
 import { fieldModules, roofFaces, roofWindowRoom, windowCorners, type RoofFace } from "../solar.ts";
 
@@ -331,6 +331,27 @@ function buildSections(b: Building, sections: readonly RoofSection[], overhang: 
         }
       : null;
     pushSection(part.solid, part.lines, drawn, plan.ov, floor.elevation, part.glass, attic, holes, frontEnd, cut);
+  }
+  // the small slopes that join a wider section to the narrower one on the same ridge
+  for (const f of bridgeFacets(usable, (s) => plans.get(s)!.ov)) {
+    const sec = usable.find((x) => x.id === f.section)!;
+    const floor = sectionFloor(b, sec) ?? floors[0];
+    const part = parts.get(floor.id);
+    if (!part) continue;
+    const at = (p: readonly number[], drop = 0) => [p[0], p[1] - floor.elevation - drop, p[2]];
+    const [r, c, d] = f.pts;
+    const top = new Color(ROOF_TOP);
+    const under = new Color(ROOF);
+    part.solid.tri(at(r), at(c), at(d), top);
+    part.solid.tri(at(r, THICK), at(d, THICK), at(c, THICK), under);
+    // the free edge, with the roof's thickness, and the lines of the two creases
+    for (const [p, q] of [[c, d]]) {
+      part.solid.tri(at(p), at(q), at(q, THICK), under);
+      part.solid.tri(at(p), at(q, THICK), at(p, THICK), under);
+      part.lines.seg(at(p), at(q), EAVE);
+    }
+    part.lines.seg(at(r, -0.004), at(d, -0.004), RIDGE);
+    part.lines.seg(at(r, -0.004), at(c, -0.004), RIDGE);
   }
   // the closed roofs first: the first part is the one the main roof's solar fields belong to
   return [...parts.values()].sort((p, q) => Number(p.lift === false) - Number(q.lift === false));

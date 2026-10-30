@@ -182,7 +182,7 @@ export class Fp3dRoomPanel extends LitElement {
     const climates = by(["climate"]);
     const media = by(["media"]);
     const switches = by(["switch", "fan", "lock"]);
-    const sensors = by(["sensor", "binary"]);
+    const sensors = by(["sensor", "binary", "alarm"]);
     const cameras = by(["camera"]);
     this.hasCameras = cameras.length > 0;
     const scenes = by(["scene", "script"]);
@@ -532,7 +532,7 @@ export class Fp3dRoomPanel extends LitElement {
 
   private sensorRow(st: HassEntity) {
     const kind = kindOf(st.entity_id)!;
-    const warn = kind === "binary" && st.state === "on";
+    const warn = (kind === "binary" && st.state === "on") || (kind === "alarm" && (st.state === "triggered" || st.state === "pending"));
     return html`<div class="fp3d-rp-row">
       <span class="fp3d-rp-icon ${warn ? "fp3d-rp-on" : ""}">${icon(kind)}</span>
       ${this.nameButton(st.entity_id)}

@@ -2,7 +2,7 @@
 // what their state looks like. Pure functions (no Lit, no three.js) so they can be tested directly.
 
 import type { Furniture, EntityRef, Floor, LampMount, Opening, Placement, RoofWindow, Room, Vec2 } from "./model.ts";
-import { centroid, outdoorZones, pointInPolygon } from "./model.ts";
+import { centroid, fridgeDoorLinked, outdoorZones, pointInPolygon } from "./model.ts";
 import { isRobotVacuum, packMotion, packScreen } from "./packs.ts";
 import type { HassEntity, HomeAssistant } from "./types.ts";
 
@@ -14,6 +14,7 @@ export type DeviceKind =
   | "climate"
   | "media"
   | "lock"
+  | "alarm"
   | "sensor"
   | "binary"
   | "camera"
@@ -29,6 +30,7 @@ const DOMAIN_KIND: Record<string, DeviceKind> = {
   climate: "climate",
   media_player: "media",
   lock: "lock",
+  alarm_control_panel: "alarm",
   sensor: "sensor",
   binary_sensor: "binary",
   camera: "camera",
@@ -73,7 +75,7 @@ const METER_UNITS = new Set(["m³", "m3", "L", "l", "kWh", "Wh", "MWh", "lx", "m
 const BINARY_CLASSES = new Set(["door", "window", "opening", "garage_door", "motion", "occupancy", "presence", "smoke", "moisture", "gas", "carbon_monoxide"]);
 
 /** Order in lists and panels. */
-export const KIND_ORDER: DeviceKind[] = ["light", "cover", "climate", "media", "switch", "fan", "lock", "binary", "sensor", "camera", "scene", "script"];
+export const KIND_ORDER: DeviceKind[] = ["light", "cover", "climate", "media", "switch", "fan", "lock", "alarm", "binary", "sensor", "camera", "scene", "script"];
 
 /** Kinds that can be toggled with a tap in 3D. */
 export const TOGGLE_KINDS = new Set<DeviceKind>(["light", "switch", "fan"]);
@@ -429,6 +431,9 @@ export function isActive(st: HassEntity | undefined): boolean {
       return st.state === "playing";
     case "lock":
       return st.state === "unlocked" || st.state === "open";
+    case "alarm":
+      // armed, arming, pending or triggered; only "disarmed" is quiet
+      return st.state !== "disarmed" && st.state !== "unknown";
     case "sensor":
       // a status sensor: a 3D printer printing, a machine running
       return isStatusSensor(st) && WORKING_STATES.has(String(st.state).toLowerCase());
@@ -881,6 +886,7 @@ const FURNITURE_NAMES: Record<string, RegExp> = {
   fridge: /(kühl|fridge|gefrier|freezer)/i,
   fridge_smart: /(kühl|fridge|gefrier|freezer)/i,
   stove: /(herd|kochfeld|cooktop|stove|induktion)/i,
+  oven: /(backofen|oven|ofen|\bfour\b)/i,
   kitchen_tall: /(backofen|oven|ofen)/i,
   dishwasher: /(spülmaschine|geschirrspül|dishwasher)/i,
   washer: /(waschmaschine|washer|washing)/i,
@@ -1030,7 +1036,12 @@ export function fridgeDoors(hass: HomeAssistant, floors: readonly Floor[]): Map<
     return s === "on" || s === "open";
   };
   const out = new Map<string, { left: boolean; right: boolean }>();
-  for (const floor of floors) for (const f of floor.furniture) if (f.type === "fridge_smart") out.set(f.id, { left: open(f.door_left), right: open(f.door_right) });
+  for (const floor of floors)
+    for (const f of floor.furniture) {
+      if (f.type === "fridge_smart") out.set(f.id, { left: open(f.door_left), right: open(f.door_right) });
+      // a plain fridge with a door sensor: its one door is the "left" one
+      else if (fridgeDoorLinked(f)) out.set(f.id, { left: open(f.door_left), right: false });
+    }
   return out;
 }
 /** Name hints for picking a lamp's light (a light that fits the name wins, otherwise any free one). */

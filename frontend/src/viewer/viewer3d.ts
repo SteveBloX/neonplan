@@ -47,7 +47,7 @@ import {
 } from "three";
 import type { Building, Floor, Furniture, Room, StartView } from "../model.ts";
 import { recolorLamps, SHADE_SENTINEL, shadeFactors } from "./lamp-colors.ts";
-import { centroid, GANG_TYPES, outdoorZones, pointInPolygon, openingStyle, setTerrain, WALL_LAMP_Y, zonesOf } from "../model.ts";
+import { centroid, fridgeDoorLinked, GANG_TYPES, outdoorZones, pointInPolygon, openingStyle, setTerrain, WALL_LAMP_Y, zonesOf } from "../model.ts";
 import { placeWallPlate } from "../geometry/walls.ts";
 import { buildEarth } from "./earth.ts";
 import { clampIntoRoom } from "../geometry/snap.ts";
@@ -1036,6 +1036,8 @@ export class FloorplanViewer {
     this.wallMode = mode;
     // ceiling lamps would float above cut walls
     for (const fv of this.floors) this.buildLamps(fv);
+    // a fridge door is cut with its body
+    for (const fv of this.floors) if (fv.floor.furniture.some(fridgeDoorLinked)) this.buildFridges(fv);
     this.invalidate();
   }
 
@@ -2147,9 +2149,12 @@ export class FloorplanViewer {
   private buildFridges(fv: FloorView): void {
     const buf = new GeoBuffer();
     for (const f of fv.floor.furniture) {
-      if (f.type !== "fridge_smart") continue;
+      const single = fridgeDoorLinked(f);
+      if (f.type !== "fridge_smart" && !single) continue;
       const st = this.fridges.get(f.id);
-      pushFridgeDoors(buf, f, mountBase(fv.floor, f), st?.l ?? 0, st?.r ?? 0);
+      // a plain fridge's door stops at the cut height in the cut-walls view, like its body
+      const maxY = single && this.wallMode === "cut" ? fv.floor.cut_height : Infinity;
+      pushFridgeDoors(buf, f, mountBase(fv.floor, f), st?.l ?? 0, st?.r ?? 0, single, maxY);
     }
     // awnings ride in the same mesh: they run out and in with their cover
     for (const f of fv.floor.furniture) if (f.type === "awning") pushAwning(buf, f, mountBase(fv.floor, f), this.awnings.get(f.id)?.cur ?? 0);

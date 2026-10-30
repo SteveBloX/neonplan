@@ -37,6 +37,7 @@ export function stateText(hass: HomeAssistant | undefined, st: HassEntity | unde
       return running && what ? what : translateState(hass, st.state);
     }
     case "lock":
+    case "alarm":
     case "camera":
       return translateState(hass, st.state);
     case "binary": {

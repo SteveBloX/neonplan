@@ -133,6 +133,8 @@ export function furnitureSymbol(type: string, w: number, d: number): Part[] | ty
       const r = Math.min(w, d) * 0.14;
       return [circle(-w * 0.22, -d * 0.2, r), circle(w * 0.22, -d * 0.2, r * 0.8), circle(-w * 0.22, d * 0.2, r * 0.8), circle(w * 0.22, d * 0.2, r)];
     }
+    case "oven":
+      return [rect(-w / 2 + 0.06, -d / 2 + 0.1, w / 2 - 0.06, d / 2 - 0.1), line(-w / 2 + 0.06, d / 2 - 0.04, w / 2 - 0.06, d / 2 - 0.04, "fp3d-sym-strong")];
     case "sink": {
       const bw = Math.min(0.5, w - 0.2);
       return [rect(-bw / 2, -d / 2 + 0.1, bw / 2, d / 2 - 0.08), circle(0, -d / 2 + 0.06, 0.025, "fp3d-sym-fill")];

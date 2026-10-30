@@ -48,6 +48,7 @@ export const SYNONYMS: Record<string, string[]> = {
   fridge: ["Kühlschrank", "fridge", "refrigerator"],
   fridge_smart: ["Kühlschrank", "fridge", "refrigerator"],
   stove: ["herd", "kochfeld", "ofen", "stove", "cooktop", "oven", "hob"],
+  oven: ["backofen", "ofen", "four", "oven"],
   tv_board: ["fernseher", "tv", "glotze", "fernsehen", "television", "telly"],
   tv_wall: ["fernseher", "tv", "glotze", "fernsehen", "television", "telly"],
   desk: ["schreibtisch", "computer", "pc", "rechner", "desk"],

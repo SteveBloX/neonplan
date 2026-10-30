@@ -121,6 +121,7 @@ const BASIC: Record<string, [Kind, Room[]]> = {
   worktop: ["kitchen", ["kitchen", "utility", "garage"]],
   sink: ["kitchen", ["kitchen", "utility"]],
   stove: ["appliance", ["kitchen"]],
+  oven: ["appliance", ["kitchen"]],
   dishwasher: ["appliance", ["kitchen"]],
   fridge: ["appliance", ["kitchen", "utility"]],
   fridge_smart: ["appliance", ["kitchen"]],

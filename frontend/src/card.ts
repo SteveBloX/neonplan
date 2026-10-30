@@ -8,6 +8,8 @@ import { BuildingController } from "./building-controller.ts";
 import "./components/room-panel.ts";
 import "./components/view3d.ts";
 import { languageReady, loadLanguage, translate, type I18nKey } from "./i18n.ts";
+import { infoStyles, renderInfoTiles } from "./info-view.ts";
+import type { Building } from "./model.ts";
 import { controls, tokens } from "./styles.ts";
 import { groundFloor } from "./solar.ts";
 import type { HomeAssistant } from "./types.ts";
@@ -513,12 +515,24 @@ clearTimeout(this.cleanTimer);
             </button>`
           : nothing}
       </div>
+      ${this.renderInfo(b)}
     </ha-card>`;
+  }
+
+  /**
+   * The tiles under the 3D view: the Tempo colours of today and tomorrow, the power of the house, the sun and the
+   * grid now, and the solar forecast. Shown when Tempo or a forecast is there (chosen in the energy tool, or found by
+   * name), or when the card asks for it (info_cards); `info_cards: false` switches them off.
+   */
+  private renderInfo(b: Building | null | undefined) {
+    if (this._fullscreen || this._clean) return nothing;
+    return renderInfoTiles(this.hass, b, this._config?.info_cards);
   }
 
   static styles = [
     tokens,
     controls,
+    infoStyles,
     css`
       .fp3d-card-controls {
         position: absolute;

@@ -5,7 +5,7 @@
 
 import { Color } from "three";
 import type { Furniture, Vec2 } from "../model.ts";
-import { builtinBase, fireOpening, gangsOf, stairsULayout, POOL_VALVE_Y } from "../model.ts";
+import { builtinBase, fireOpening, fridgeDoorLinked, gangsOf, stairsULayout, POOL_VALVE_Y } from "../model.ts";
 import { isRobotVacuum, mountBase, packItem, packMotion, packMovingPart, packRobotCentre, packRobotPart, packScreen, type PackItem, type PackMotion, type PackPart } from "../packs.ts";
 import { fitParts } from "../pack-scale.ts";
 import { binColors, binShape, householdCountry, mailboxShape, type BinShape, type MailboxShape } from "../household.ts";
@@ -651,14 +651,21 @@ function mailbox(b: Builder, w: number, d: number, h: number, shape: MailboxShap
   b.box(-w * 0.36, w * 0.36, h * 0.66, h * 0.7, d / 2, d / 2 + 0.008, C.dark);
 }
 
-/** Smart side-by-side fridge without its doors (they move: see pushFridgeDoors): the body and, behind the doors, shelves. */
-function fridgeSmart(b: Builder, w: number, d: number, h: number): void {
+/**
+ * Smart side-by-side fridge without its doors (they move: see pushFridgeDoors): the body and, behind the doors,
+ * shelves. `single`: a plain fridge with one door (a door sensor opens it), shelves across its full width.
+ */
+function fridgeSmart(b: Builder, w: number, d: number, h: number, single = false): void {
   const front = d / 2 - FRIDGE_DOOR;
   b.box(-w / 2, w / 2, 0.02, h, -d / 2, front, C.body, C.bodyTop, EDGE_FURN);
   b.box(-w / 2 + 0.05, w / 2 - 0.05, 0, 0.02, -d / 2 + 0.05, front - 0.05, C.dark);
   // shelves of both compartments, seen when a door stands open
   for (const y of [0.35, 0.7, 1.05, 1.4]) {
     if (y > h - 0.15) continue;
+    if (single) {
+      b.seg(-w / 2 + 0.03, y, front + 0.001, w / 2 - 0.03, y, front + 0.001, EDGE_FAINT);
+      continue;
+    }
     b.seg(-w / 2 + 0.03, y, front + 0.001, -0.03, y, front + 0.001, EDGE_FAINT);
     b.seg(0.03, y, front + 0.001, w / 2 - 0.03, y, front + 0.001, EDGE_FAINT);
   }
@@ -839,24 +846,29 @@ export function pushAwning(buf: GeoBuffer, f: Pick<Furniture, "x" | "z" | "rotat
   if (reach > 0.05) valance(end[1], end[0]);
 }
 
-export function pushFridgeDoors(buf: GeoBuffer, f: Pick<Furniture, "x" | "z" | "rotation" | "w" | "d" | "h" | "mirror">, base: number, left: number, right: number): void {
+/**
+ * `single`: a plain fridge – one door across the full width, hinged on the left (`left` is how far it stands open).
+ * `maxY`: the height the doors are cut at in the cut-walls view (they would hang above the cut body).
+ */
+export function pushFridgeDoors(buf: GeoBuffer, f: Pick<Furniture, "x" | "z" | "rotation" | "w" | "d" | "h" | "mirror">, base: number, left: number, right: number, single = false, maxY = Infinity): void {
   const p0 = buf.p.length;
-  pushFridgeDoorsUnflipped(buf, f, base, left, right);
+  pushFridgeDoorsUnflipped(buf, f, base, left, right, single, maxY);
   if (f.mirror) flipWinding(buf, p0);
 }
 
-function pushFridgeDoorsUnflipped(buf: GeoBuffer, f: Pick<Furniture, "x" | "z" | "rotation" | "w" | "d" | "h" | "mirror">, base: number, left: number, right: number): void {
+function pushFridgeDoorsUnflipped(buf: GeoBuffer, f: Pick<Furniture, "x" | "z" | "rotation" | "w" | "d" | "h" | "mirror">, base: number, left: number, right: number, single: boolean, maxY: number): void {
   const a = f.rotation * DEG;
   const c = Math.cos(a);
   const s = Math.sin(a);
   const mx = f.mirror ? -1 : 1;
   const tf = (lx: number, lz: number): [number, number] => [f.x + mx * lx * c - lz * s, f.z + mx * lx * s + lz * c];
   const y0 = base + 0.05;
-  const y1 = base + f.h - 0.02;
+  const y1 = Math.min(base + f.h - 0.02, maxY);
+  if (y1 <= y0 + 0.01) return;
   const red = new Color(0.75, 0.1, 0.14);
   const dark = new Color(C.dark);
   const accent = new Color(C.accent);
-  const dw = f.w / 2 - 0.006;
+  const dw = (single ? f.w : f.w / 2) - 0.006;
   // a door: u runs from the hinge along the door (positive to the right), v through its thickness (0 = front face)
   const door = (hx: number, sign: 1 | -1, angle: number) => {
     const open = angle / opening;
@@ -881,11 +893,23 @@ function pushFridgeDoorsUnflipped(buf: GeoBuffer, f: Pick<Furniture, "x" | "z" |
       quad([q[3], q[2], q[1], q[0]], ya, ya, col);
     };
     box(0, dw, y0, y1, -FRIDGE_DOOR, 0, side, front);
-    // handle at the free edge
-    box(dw - 0.05, dw - 0.03, base + f.h * 0.45, base + f.h * 0.75, 0.005, 0.025, accent);
+    // handle at the free edge (a plain fridge: one bar on each side of the seam between its compartments)
+    const bar = (ya: number, yb: number) => {
+      if (Math.min(yb, y1) > ya + 0.01) box(dw - 0.05, dw - 0.03, ya, Math.min(yb, y1), 0.005, 0.025, accent);
+    };
+    if (single) {
+      const split = base + f.h * 0.62;
+      bar(split + 0.08, split + 0.4);
+      bar(split - 0.4, split - 0.08);
+      if (split < y1) box(0, dw, split - 0.004, split + 0.004, 0.001, 0.005, dark);
+    } else bar(base + f.h * 0.45, base + f.h * 0.75);
     return box;
   };
   const opening = 1.83; // ~105°
+  if (single) {
+    door(-f.w / 2, 1, left * opening);
+    return;
+  }
   const leftBox = door(-f.w / 2, 1, left * opening);
   // water dispenser: a dark recess in the left door
   leftBox(0.12, 0.3, base + f.h * 0.5, base + f.h * 0.68, 0.001, 0.005, dark);
@@ -907,6 +931,30 @@ function stove(b: Builder, w: number, d: number, h: number): void {
     const sz = (z * d) / 0.62;
     b.cyl(sx, sz, r, h, h + 0.004, C.dark, 0x16263f, 12, EDGE_GLOW);
   }
+}
+
+/** A built-in oven in a base unit: knobs and a display on top, a dark glass door with its handle, a drawer below. */
+function oven(b: Builder, w: number, d: number, h: number): void {
+  b.box(-w / 2, w / 2, 0.02, h - 0.04, -d / 2, d / 2 - 0.02, C.body, C.bodyTop, EDGE_FURN);
+  b.box(-w / 2 + 0.02, w / 2 - 0.02, 0, 0.08, -d / 2 + 0.02, d / 2 - 0.06, C.dark);
+  b.box(-w / 2, w / 2, h - 0.04, h, -d / 2, d / 2, C.whiteTop, C.whiteTop, EDGE_FURN);
+  const z = d / 2 - 0.02;
+  const strip = h - 0.16;
+  const glass = Math.max(0.2, h - 0.24);
+  const drawer = 0.3;
+  // the control strip: a display in the middle, a knob on each side
+  b.box(-w * 0.14, w * 0.14, strip + 0.03, strip + 0.08, z, z + 0.008, C.dark, C.dark, EDGE_GLOW);
+  for (const x of [-0.37, -0.25, 0.25, 0.37]) {
+    const kx = (x * w) / 0.6;
+    b.box(kx - 0.016, kx + 0.016, strip + 0.035, strip + 0.065, z, z + 0.02, C.metal, C.metal, EDGE_FAINT);
+  }
+  b.seg(-w / 2, strip, z, w / 2, strip, z, EDGE_FAINT);
+  // the door: dark glass between the strip and the drawer, a bar handle on its upper edge
+  b.box(-w / 2 + 0.03, w / 2 - 0.03, drawer, glass, z, z + 0.01, C.dark, C.dark, EDGE_GLOW);
+  b.seg(-w / 2 + 0.08, glass - 0.05, z + 0.025, w / 2 - 0.08, glass - 0.05, z + 0.025, EDGE_GLOW);
+  // the drawer under it
+  b.seg(-w / 2, drawer - 0.02, z, w / 2, drawer - 0.02, z, EDGE_FAINT);
+  b.seg(-w * 0.2, 0.2, z + 0.012, w * 0.2, 0.2, z + 0.012, EDGE_GLOW);
 }
 
 function sink(b: Builder, w: number, d: number, h: number): void {
@@ -1686,7 +1734,9 @@ function buildFurniture(buf: GeoBuffer, lines: LineBuffer, shadow: GeoBuffer, f:
       kitchen(b, w, d, h);
       break;
     case "fridge":
-      fridge(b, w, d, h);
+      // with a door sensor the door is a part of its own (pushFridgeDoors) and the body stands open behind it
+      if (fridgeDoorLinked(f)) fridgeSmart(b, w, d, h, true);
+      else fridge(b, w, d, h);
       break;
     case "fridge_smart":
       fridgeSmart(b, w, d, h);
@@ -1746,6 +1796,9 @@ function buildFurniture(buf: GeoBuffer, lines: LineBuffer, shadow: GeoBuffer, f:
       return;
     case "stove":
       stove(b, w, d, h);
+      break;
+    case "oven":
+      oven(b, w, d, h);
       break;
     case "sink":
       sink(b, w, d, h);

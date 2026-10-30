@@ -555,6 +555,8 @@ OUTDOOR_SCHEMA = vol.Schema(
         # fences and pergolas: the closing edge is left out; pergola: X-bracing on the sides
         vol.Optional("open", default=False): bool,
         vol.Optional("bracing", default=False): bool,
+        # pergola: the roof is covered with transparent plates
+        vol.Optional("glazed", default=False): bool,
         # cut out of every area beneath it that contains it
         vol.Optional("cut", default=False): bool,
         # pools: round or oval, resized as a whole
@@ -613,6 +615,8 @@ ROOF_SECTION_SCHEMA = vol.Schema(
         # gable, hip and half-hip: how the ridge ends at either end (None = as the shape, #466)
         vol.Optional("end_u0", default=None): vol.Any(None, vol.In(["gable", "hip", "halfhip"])),
         vol.Optional("end_u1", default=None): vol.Any(None, vol.In(["gable", "hip", "halfhip"])),
+        # a wider section next to a narrower one on the same ridge: the length (m) of the small slope joining them
+        vol.Optional("bridge", default=None): vol.Any(None, vol.All(vol.Coerce(float), vol.Range(min=0, max=20))),
         # turned (degrees, clockwise in the plan) about a pivot point: a wing at an angle (#634, #724)
         vol.Optional("rotation", default=None): vol.Any(None, vol.All(vol.Coerce(float), vol.Range(min=-360, max=360))),
         vol.Optional("pivot", default=None): vol.Any(None, _POINT),
@@ -992,6 +996,10 @@ ENERGY_DEFAULTS = {
     "tariff": None,
     "gas": None,
     "water": None,
+    "tempo_today": None,
+    "tempo_tomorrow": None,
+    "forecast_today": None,
+    "forecast_tomorrow": None,
 }
 
 # Power sensors in watts: grid positive = import, battery positive = discharging (both can be inverted)
@@ -1009,6 +1017,11 @@ ENERGY_SCHEMA = vol.Schema(
         # Energie Pro: gas and water meters (counters, e.g. m³); the house card shows today's use
         vol.Optional("gas", default=None): _ENTITY,
         vol.Optional("water", default=None): _ENTITY,
+        # the info tiles under the card: the Tempo day colours and the solar forecast (kWh); None = found by name
+        vol.Optional("tempo_today", default=None): _ENTITY,
+        vol.Optional("tempo_tomorrow", default=None): _ENTITY,
+        vol.Optional("forecast_today", default=None): _ENTITY,
+        vol.Optional("forecast_tomorrow", default=None): _ENTITY,
     },
     extra=vol.ALLOW_EXTRA,
 )

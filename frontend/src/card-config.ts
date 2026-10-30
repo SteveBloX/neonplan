@@ -75,6 +75,8 @@ export interface CardConfig {
   controls_hide_after?: number;
   /** On the roof only the whole plant's solar power in one card, instead of a card per field. */
   solar_total?: boolean;
+  /** The tiles under the 3D view (Tempo colours, house power, solar forecast): shown when Tempo or a forecast is found; true always, false never. */
+  info_cards?: boolean;
   /** The plan view: the house seen from above without its roof, like a floor plan, with every device's icon and the room temperatures. */
   plan_view?: boolean;
   /** Plan view: how far the view tilts from straight above, in degrees (0–70, default 0), and which way it turns (0–359°). */

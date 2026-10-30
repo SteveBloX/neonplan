@@ -421,6 +421,8 @@
           // ?card&plan: the plan view (from above, no roof); &angle=20 tilts it, &rot=90 turns it; &solartotal: one solar card on the roof
           ...(params.has("plan") ? { plan_view: true, plan_angle: Number(params.get("angle")) || 0, plan_rotation: Number(params.get("rot")) || 0, controls: true, height: 640 } : {}),
           ...(params.has("solartotal") ? { solar_total: true } : {}),
+          // &h=700: the card's height in px (to look at the roof from a high angle)
+          ...(params.get("h") ? { height: Number(params.get("h")) } : {}),
           // &names=0: no room names (the values stay); &valtemp: only the temperature beside the rooms
           ...(params.get("names") === "0" ? { room_names: false } : {}),
           ...(params.has("valtemp") ? { room_values: "temperature" } : {}),

@@ -29,7 +29,8 @@ import { screenName, setScreenName, setVoiceHere, setVoicePipeline, voiceOnHere,
 import { doorbellCamera, doorbellEntities, directorOnHere, HOLD_DEFAULT, HOLD_MAX, HOLD_MIN, setDirectorHere, type DirectorSettings } from "../director.ts";
 import { deviceSensors, energySummary, flowSegments, gridPoint, powerSensorFor, proposeEnergySensors, type EnergyPrefs, type FlowSegment, proposeMeters } from "../energy.ts";
 import { CLIMATE_ATTRS, isPulseDrive, isStatusSensor, robotRoomSensor, TOGGLE_KINDS } from "../devices.ts";
-import { activeSections, sectionFloor, dormerParent, effectiveDormer, proposeDormer, sectionGeometry, floorOutline, polygonBox, headroomLines, ridgeHeight, sectionAbove, sectionCutsBelow, roofSectionsFromRooms, sectionFrame, sectionTurn, turnPoint, turnSectionAbout, wallTopUnder } from "../roof-sections.ts";
+import { findForecast, findTempo } from "../info.ts";
+import { activeSections, alignRidge, bridgeFacets, sectionFloor, dormerParent, effectiveDormer, proposeDormer, sectionGeometry, floorOutline, polygonBox, headroomLines, ridgeHeight, sectionAbove, sectionCutsBelow, roofSectionsFromRooms, sectionFrame, sectionTurn, turnPoint, turnSectionAbout, wallTopUnder } from "../roof-sections.ts";
 import { spaSteps } from "../spa.ts";
 import { bestFace, clampField, faceAt, faceCompass, fieldCells, fieldFace, fieldModules, GROUND, moveField, pointOnFace, proposeField, proposeGroundField, proposeWindow, proposeWallField, roofFaces, rowCounts, turnGroundField, fieldCenter, wallFaces, windowAsField, windowCorners, onFace, onField, rayOnFace, type RoofFace } from "../solar.ts";
 import type { SurfaceGrab, SurfaceRay } from "../viewer/viewer3d.ts";
@@ -219,7 +220,7 @@ type SettingsTopic = "house" | "weather" | "director" | "voice" | "locate" | "fa
 
 /** Wall view side bar: what stands or hangs at a wall, by kind. */
 const WALL_CATS: Record<string, string[]> = {
-  base: ["kitchen", "sink", "stove", "dishwasher", "sideboard", "dresser", "tv_board", "nightstand", "washbasin", "washer", "dryer", "worktop", "desk"],
+  base: ["kitchen", "sink", "stove", "oven", "dishwasher", "sideboard", "dresser", "tv_board", "nightstand", "washbasin", "washer", "dryer", "worktop", "desk"],
   hang: ["kitchen_wall", "tv_wall", "shelf", "lamp_wall", "radiator", "ac_unit", "led_strip"],
   tall: ["kitchen_tall", "fridge", "wardrobe", "tall_cabinet", "shelf", "coat_rack"],
   living: ["sofa", "armchair", "bed", "bunk_bed", "bench", "corner_bench", "plant"],
@@ -4433,6 +4434,43 @@ export class Fp3dEditor extends LitElement {
             <p class="fp3d-sub">${this.t(sec.points ? "roof_points_hint" : "roof_outline_hint")}</p>`
           : nothing}
         <p class="fp3d-sub">${this.t("roof_ridge_height")}: ${this.m(ridgeHeight(sec), 2)} · ${this.t("roof_section_hint")}</p>
+        ${admin && !flat && !pent
+          ? (() => {
+              // a wider section on the same ridge as the one it touches: the length of the small slope joining them
+              const roof = this._doc.settings.roof;
+              const ovOf = (s: RoofSection) => {
+                const o = s.overhang ?? roof.overhang;
+                return { a: o, b: o, u0: o, u1: o };
+              };
+              if (!bridgeFacets((roof.sections ?? []).map((x) => (x.id === sec.id ? { ...x, bridge: 1 } : x)), ovOf).some((f) => f.section === sec.id)) return nothing;
+              return html`<div class="fp3d-form" title=${this.t("roof_bridge_hint")}>
+                ${num(this.t("roof_bridge"), sec.bridge ?? 0, (v) => set({ bridge: v > 0.05 ? Math.min(20, v) : null }), 0.1, 0)}
+                <p class="fp3d-sub fp3d-wide">${this.t("roof_bridge_hint")}</p>
+              </div>`;
+            })()
+          : nothing}
+        ${admin && !flat && !pent
+          ? (() => {
+              // sections on the same axis whose ridge this one can continue (a wider wing behind a narrower house)
+              const all = this._doc.settings.roof.sections ?? [];
+              const targets = all.filter((x) => x.id !== sec.id && !x.dormer && alignRidge(sec, x));
+              if (!targets.length) return nothing;
+              return html`<label class="fp3d-field fp3d-wide" title=${this.t("roof_align_ridge_hint")}
+                >${this.t("roof_align_ridge")}
+                <select
+                  @change=${(e: Event) => {
+                    const target = all.find((x) => x.id === (e.target as HTMLSelectElement).value);
+                    const fit = target && alignRidge(sec, target);
+                    if (fit) set(fit);
+                    (e.target as HTMLSelectElement).value = "";
+                  }}
+                >
+                  <option value="" selected>–</option>
+                  ${targets.map((x) => html`<option value=${x.id}>${this.t("roof_section")} ${all.indexOf(x) + 1}</option>`)}
+                </select></label
+              >`;
+            })()
+          : nothing}
         ${admin
           ? html`<div class="fp3d-actions">
               ${flat
@@ -6469,6 +6507,10 @@ export class Fp3dEditor extends LitElement {
           ? html`<label class="fp3d-check fp3d-wide"
               ><input type="checkbox" .checked=${!!a.bracing} ?disabled=${!admin} @change=${(ev: Event) => this.updateOutdoor({ bracing: (ev.target as HTMLInputElement).checked || undefined })} />
               ${this.t("outdoor_bracing")}</label
+            >
+            <label class="fp3d-check fp3d-wide"
+              ><input type="checkbox" .checked=${!!a.glazed} ?disabled=${!admin} @change=${(ev: Event) => this.updateOutdoor({ glazed: (ev.target as HTMLInputElement).checked || undefined })} />
+              ${this.t("outdoor_glazed")}</label
             >`
           : nothing}
         <label class="fp3d-check fp3d-wide" title=${this.t("outdoor_cut_hint")}
@@ -11401,7 +11443,14 @@ export class Fp3dEditor extends LitElement {
         ${this.entitySelect(this.t("energy_tariff_sensor"), e.tariff, undefined, tariff, pick("tariff"))}
         ${this.entitySelect(this.t("energy_gas_meter"), e.gas ?? null, undefined, meter("gas"), (v) => this.setEnergy({ gas: v === "none" ? null : v }))}
         ${this.entitySelect(this.t("energy_water_meter"), e.water ?? null, undefined, meter("water"), (v) => this.setEnergy({ water: v === "none" ? null : v }))}
+        ${this.hass
+          ? html`${this.entitySelect(this.t("info_tempo_today"), e.tempo_today ?? null, findTempo(this.hass, { tempo_today: null, tempo_tomorrow: e.tempo_tomorrow }).today, this.entityOptions((id) => id.startsWith("sensor.")), (v) => this.setEnergy({ tempo_today: v === "none" ? null : v }))}
+            ${this.entitySelect(this.t("info_tempo_tomorrow"), e.tempo_tomorrow ?? null, findTempo(this.hass, { tempo_today: e.tempo_today, tempo_tomorrow: null }).tomorrow, this.entityOptions((id) => id.startsWith("sensor.")), (v) => this.setEnergy({ tempo_tomorrow: v === "none" ? null : v }))}
+            ${this.entitySelect(this.t("info_forecast_today"), e.forecast_today ?? null, findForecast(this.hass, { forecast_today: null, forecast_tomorrow: e.forecast_tomorrow }).today, this.entityOptions((id) => numberish(id) && /^(Wh|kWh|MWh)$/.test(attr(id, "unit_of_measurement") ?? "")), (v) => this.setEnergy({ forecast_today: v === "none" ? null : v }))}
+            ${this.entitySelect(this.t("info_forecast_tomorrow"), e.forecast_tomorrow ?? null, findForecast(this.hass, { forecast_today: e.forecast_today, forecast_tomorrow: null }).tomorrow, this.entityOptions((id) => numberish(id) && /^(Wh|kWh|MWh)$/.test(attr(id, "unit_of_measurement") ?? "")), (v) => this.setEnergy({ forecast_tomorrow: v === "none" ? null : v }))}`
+          : nothing}
       </div>
+      <p class="fp3d-sub">${this.t("info_hint")}</p>
       <p class="fp3d-sub">${this.t("energy_meters_hint")}</p>
       <div class="fp3d-actions">
         <button class="fp3d-btn" ?disabled=${!admin || !this.hass} @click=${() => this.importEnergyPrefs()}>${this.t("energy_import_prefs")}</button>
@@ -11981,8 +12030,7 @@ export class Fp3dEditor extends LitElement {
             <p class="fp3d-sub fp3d-wide">${this.t("hh_appliance_hint")}</p>`
         : nothing}
       ${fridge
-        ? html`${f.type === "fridge" ? this.entitySelect(this.t("hh_fridge_door"), f.door_left ?? null, undefined, doors, (v) => this.updateFurniture({ door_left: ref(v) })) : nothing}
-            ${this.num(this.t("hh_door_alarm"), f.door_alarm ?? 2, (v) => this.updateFurniture({ door_alarm: Math.max(0.5, Math.min(120, v)) }), 0.5)}`
+        ? html`${this.num(this.t("hh_door_alarm"), f.door_alarm ?? 2, (v) => this.updateFurniture({ door_alarm: Math.max(0.5, Math.min(120, v)) }), 0.5)}`
         : nothing}
       ${electric
         ? html`${this.entitySelect(this.t("hh_service_entity"), f.service ?? null, undefined, services, (v) => this.updateFurniture({ service: ref(v) }))}
@@ -12247,7 +12295,7 @@ export class Fp3dEditor extends LitElement {
                 (id.startsWith("binary_sensor.") && (f.type.endsWith("smoke_detector") || ALARM_CLASSES.has(String(hass.states[id]?.attributes.device_class ?? "")))),
     );
     const power = this.entityOptions((id) => this.isPowerSensor(id));
-    const doorSensors = f.type === "fridge_smart" ? this.entityOptions((id) => id.startsWith("binary_sensor.")) : [];
+    const doorSensors = f.type === "fridge_smart" || f.type === "fridge" ? this.entityOptions((id) => /^(binary_sensor|input_boolean)\./.test(id)) : [];
     return html`<div class="fp3d-form fp3d-links">
         ${f.type === "grid_point"
           ? html`<p class="fp3d-sub fp3d-wide">${this.t("grid_point_hint")}</p>`
@@ -12401,6 +12449,12 @@ export class Fp3dEditor extends LitElement {
               ${this.entitySelect(this.t("furn_door_right"), f.door_right ?? null, undefined, doorSensors, (v) => this.updateFurniture({ door_right: v }))}
             </div>
             <p class="fp3d-sub">${this.t("fridge_hint")}</p>`
+        : nothing}
+      ${f.type === "fridge"
+        ? html`<div class="fp3d-form fp3d-links">
+              ${this.entitySelect(this.t("fridge_door_entity"), f.door_left ?? null, undefined, doorSensors, (v) => this.updateFurniture({ door_left: v && v !== "none" ? v : null }))}
+            </div>
+            <p class="fp3d-sub">${this.t("fridge_door_hint")}</p>`
         : nothing}
       ${hasScreen(f.type) ? this.renderPictureRules(f) : nothing}
       <p class="fp3d-sub">${this.t(lamp ? (f.type === "lamp_pendant" ? "lamp_hint_pendant" : "lamp_hint") : media ? "furn_links_hint_tv" : isRobotVacuum(f.type) ? "robot_hint" : "furn_links_hint")}</p>`;

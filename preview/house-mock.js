@@ -21,6 +21,38 @@ export async function loadHouse(url) {
   const building = file?.format === "neonplan3d" ? file.building : file;
   if (!building?.floors || !building.settings) throw new Error(`${url} is no NeonPlan 3D plan`);
   for (const f of building.floors) f.background = null;
+  // ?kitchentest: the first fridge gets a door sensor and an oven stands beside it (to try the openable door and the oven)
+  if (new URLSearchParams(location.search).has("kitchentest")) {
+    for (const floor of building.floors) {
+      const fr = floor.furniture.find((f) => f.type === "fridge");
+      if (!fr) continue;
+      fr.door_left = "binary_sensor.test_kuehlschrank_tuer";
+      const a = (fr.rotation * Math.PI) / 180;
+      floor.furniture.push({ id: "oven_test", type: "oven", x: fr.x + Math.cos(a) * 0.65, z: fr.z + Math.sin(a) * 0.65, rotation: fr.rotation, w: 0.6, d: 0.62, h: 0.92, variant: null });
+      break;
+    }
+  }
+  // ?ridgetest: the second roof section continues the first one's ridge (pitches as alignRidge sets them); &hiprear gives it a hip at its rear end
+  if (new URLSearchParams(location.search).has("ridgetest")) {
+    const [, wing] = building.settings.roof.sections ?? [];
+    if (wing) {
+      Object.assign(wing, { pitch_a: 35.9, pitch_b: 28.7 });
+      if (new URLSearchParams(location.search).has("hiprear")) wing.end_u0 = "hip";
+      if (new URLSearchParams(location.search).has("bridge")) wing.bridge = Number(new URLSearchParams(location.search).get("bridge")) || 2;
+    }
+  }
+  // ?pergolatest: a glazed pergola (transparent plates) over the first terrace, an alarm panel and a motion sensor placed in the first room
+  if (new URLSearchParams(location.search).has("pergolatest")) {
+    const floor = building.floors[0];
+    const terrace = (floor.outdoor ?? []).find((a) => a.type === "terrace");
+    if (terrace) floor.outdoor.push({ ...terrace, id: "outdoor_pergola_test", type: "pergola", glazed: true, height: 2.4, name: null, area_id: null });
+    const room = floor.rooms.find((r) => r.name === "Salon") ?? floor.rooms[0];
+    const xs = room.points.map((p) => p[0]);
+    const zs = room.points.map((p) => p[1]);
+    const cx = (Math.min(...xs) + Math.max(...xs)) / 2;
+    const cz = (Math.min(...zs) + Math.max(...zs)) / 2;
+    floor.placements.push({ entity_id: "alarm_control_panel.somfy_test", x: cx - 0.4, z: cz, show_name: true }, { entity_id: "binary_sensor.somfy_mouvement_test", x: cx + 0.4, z: cz, show_name: true });
+  }
   const ids = [...new Set([...JSON.stringify(building).matchAll(ENTITY_ID)].map((m) => m[1]))].sort();
   const states = {};
   const entities = {};
@@ -28,6 +60,19 @@ export async function loadHouse(url) {
     states[id] = invent(id, i);
     entities[id] = { entity_id: id, area_id: null };
   });
+  // ?infotest: Tempo colours and a solar forecast, to try the info tiles under the card (otherwise the tiles stay away)
+  if (new URLSearchParams(location.search).has("infotest")) {
+    const add = (id, state, attributes = {}) => {
+      states[id] = { entity_id: id, state, attributes: { friendly_name: id.split(".")[1].replace(/_/g, " "), ...attributes } };
+      entities[id] = { entity_id: id, area_id: null };
+    };
+    add("sensor.rte_tempo_couleur_aujourd_hui", "bleu");
+    add("sensor.rte_tempo_couleur_demain", "rouge");
+    add("sensor.energy_production_today", "14.2", { unit_of_measurement: "kWh", device_class: "energy" });
+    add("sensor.energy_production_tomorrow", "9.8", { unit_of_measurement: "kWh", device_class: "energy" });
+    building.energy = { ...building.energy, consumption: "sensor.test_maison_puissance" };
+    add("sensor.test_maison_puissance", "1340", { unit_of_measurement: "W", device_class: "power" });
+  }
   // sun.sun is needed for the sun and the day/night look even when the plan does not link it
   states["sun.sun"] ??= invent("sun.sun", 0);
   entities["sun.sun"] ??= { entity_id: "sun.sun", area_id: null };
@@ -80,7 +125,7 @@ function invent(id, index) {
     case "vacuum":
       return state("docked", { battery_level: 80 });
     case "alarm_control_panel":
-      return state("disarmed");
+      return state(has(object, "test") ? "armed_away" : "disarmed");
     case "sun":
       return state("above_horizon", { elevation: 32, azimuth: 205 });
     default:

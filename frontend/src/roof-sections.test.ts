@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { emptyBuilding, newFloor, ROOF_SHAPES, type Room, type RoofSection } from "./model.ts";
-import { onSection, sectionTurn, turnPoint, turnSectionAbout, coversIn, cutHole, cutUnder, dormerHole, dormerHoles, dormerParent, floorOutline, lineOutside, sectionCovers, sectionEnds, sectionUV, wingJunction, wingSection, offsetPolygon, polygonBox, proposeDormer, ridgeHeight, roofRider, roofSectionsFromRooms, roofUnderAt, sectionFrame, sectionGeometry, sectionHeightAt, sectionOverhang, sectionPolygon, sectionProfile, wallTopUnder } from "./roof-sections.ts";
+import { alignRidge, bridgeFacets, onSection, sectionTurn, turnPoint, turnSectionAbout, coversIn, cutHole, cutUnder, dormerHole, dormerHoles, dormerParent, floorOutline, lineOutside, sectionCovers, sectionEnds, sectionUV, wingJunction, wingSection, offsetPolygon, polygonBox, proposeDormer, ridgeHeight, roofRider, roofSectionsFromRooms, roofUnderAt, sectionFrame, sectionGeometry, sectionHeightAt, sectionOverhang, sectionPolygon, sectionProfile, wallTopUnder } from "./roof-sections.ts";
 import { buildRoof } from "./viewer/roof.ts";
 
 const near = (a: number, b: number, eps = 1e-6) => assert.ok(Math.abs(a - b) < eps, `${a} != ${b}`);
@@ -39,6 +39,46 @@ test("a lower eave on one side (a catslide) moves the ridge and keeps both slope
   near(p.rh, 6);
   near(p.y(8), 1);
   near(ridgeHeight(section({ eave_b: 1 })), 6);
+});
+
+test("a wider wing on the same axis gets the pitches that put its ridge on the other's line at the same height", () => {
+  const main = section({ axis: "z", x0: 3.7, x1: 13.05, z0: 6.4, z1: 15.7, pitch_a: 35, pitch_b: 35, eave_a: 2.5, eave_b: 2.5 });
+  const wing = section({ id: "w", axis: "z", x0: 3.85, x1: 14.35, z0: 15.7, z1: 22.2, pitch_a: 35, pitch_b: 35, eave_a: 2.5, eave_b: 2.5 });
+  const fit = alignRidge(wing, main);
+  assert.ok(fit);
+  const aligned = { ...wing, ...fit };
+  const mp = sectionProfile(main);
+  const wp = sectionProfile(aligned);
+  near(wp.rh, mp.rh, 0.05);
+  // the ridge lies on the same x in both
+  near(aligned.x0 + wp.vr, main.x0 + mp.vr, 0.05);
+  // other axis, or a ridge below the eave: nothing to do
+  assert.equal(alignRidge(section({ axis: "x" }), main), null);
+  assert.equal(alignRidge({ ...wing, eave_a: 9 }, main), null);
+});
+
+test("a wider section on the same ridge gets a small slope on the side where it reaches out, none on the other (bridge)", () => {
+  const main = section({ id: "m", axis: "z", x0: 3.7, x1: 13.05, z0: 6.4, z1: 15.7, pitch_a: 35, pitch_b: 35, eave_a: 2.5, eave_b: 2.5 });
+  const plain = section({ id: "w", axis: "z", x0: 3.85, x1: 14.35, z0: 15.7, z1: 22.2, eave_a: 2.5, eave_b: 2.5 });
+  const wing = { ...plain, ...alignRidge(plain, main)! };
+  const ov = () => ({ a: 0.4, b: 0.4, u0: 0.4, u1: 0.4 });
+  // no length, no slope
+  assert.equal(bridgeFacets([main, wing], ov).length, 0);
+  const facets = bridgeFacets([main, { ...wing, bridge: 2 }], ov);
+  // the left side reaches out only 15 cm: no slope there, one on the right (1.3 m)
+  assert.equal(facets.length, 1);
+  const [r, c, d] = facets[0].pts;
+  // the corner on the ridge at the joint, the wider eave at the joint, the narrower eave 2 m back over the main roof
+  near(r[0], 8.373, 0.05);
+  near(r[2], 15.7);
+  near(r[1], sectionProfile(main).rh, 0.05);
+  near(c[2], 15.7);
+  assert.ok(c[0] > 14.5);
+  near(d[2], 13.7);
+  assert.ok(d[0] > 13.3 && d[0] < 13.6);
+  near(c[1], d[1], 0.2);
+  // a ridge that does not line up gets nothing
+  assert.equal(bridgeFacets([main, { ...plain, bridge: 2 }], ov).length, 0);
 });
 
 test("a pent roof rises from side a to its high edge at side b, a flat roof stays at its eave", () => {

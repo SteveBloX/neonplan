@@ -484,6 +484,11 @@ export interface RoofSection {
   end_u0?: RoofEnd | null;
   end_u1?: RoofEnd | null;
   /**
+   * A section wider than the one it touches on the same ridge (the ridge continuous): the length in m, over the
+   * narrower one, of the small slope that joins the two where this one reaches out further; null or 0 = none.
+   */
+  bridge?: number | null;
+  /**
    * Turned (degrees, clockwise as the plan shows it) about `pivot`: a wing at an angle (#634, #724). x0 … z1 and
    * the axis describe the section before the turn; null or 0 = not turned (every roof drawn so far).
    */
@@ -956,6 +961,8 @@ export interface OutdoorArea {
   open?: boolean;
   /** Pergola: diagonal X-bracing on every side. */
   bracing?: boolean;
+  /** Pergola: the roof is covered with transparent plates (Plexiglas, polycarbonate). */
+  glazed?: boolean;
   /** This area is cut out of every area beneath it that contains it (a wild patch or pond inside a lawn). */
   cut?: boolean;
   /** Pool: round or oval (chosen before drawing); its outline is made from its box and resized as a whole. */
@@ -1175,6 +1182,12 @@ export interface EnergySettings {
   /** Energie Pro: gas and water meters (counters such as m³ or litres); the house card shows today's use. */
   gas?: string | null;
   water?: string | null;
+  /** The colour of today's and tomorrow's Tempo day (RTE Tempo); null = found by name. */
+  tempo_today?: string | null;
+  tempo_tomorrow?: string | null;
+  /** The solar forecast for today and tomorrow in kWh (Forecast.Solar, Solcast); null = found by name. */
+  forecast_today?: string | null;
+  forecast_tomorrow?: string | null;
 }
 
 /** A person and the sensor whose state names the room they are in (ESPresense, Bermuda, …). */
@@ -1318,6 +1331,7 @@ export const FURNITURE_TYPES = [
   "worktop",
   "sink",
   "stove",
+  "oven",
   "dishwasher",
   "fridge",
   "bed",
@@ -1369,7 +1383,7 @@ export const FURNITURE_GROUPS: Record<string, FurnitureType[]> = {
   lights: ["lamp_ceiling", "lamp_downlight", "lamp_spot", "lamp_panel", "lamp_pendant", "lamp_fan", "lamp_floor", "lamp_uplight", "lamp_table", "lamp_wall", "led_strip", "lamp_bollard", "lamp_garden"],
   living: ["sofa", "sofa_l", "sofa_u", "armchair", "stool", "coffee_table", "tv_board", "tv_wall", "sideboard", "shelf", "fireplace", "plant", "rug"],
   dining: ["table", "table_round", "chair", "bench", "corner_bench", "bar_stool"],
-  kitchen: ["kitchen", "kitchen_wall", "kitchen_tall", "island", "worktop", "sink", "stove", "dishwasher", "fridge"],
+  kitchen: ["kitchen", "kitchen_wall", "kitchen_tall", "island", "worktop", "sink", "stove", "oven", "dishwasher", "fridge"],
   sleeping: ["bed", "bunk_bed", "nightstand", "wardrobe", "dresser"],
   bath: ["bathtub", "shower", "wc", "washbasin", "washer", "dryer"],
   work: ["desk", "worktop", "office_chair", "tall_cabinet", "coat_rack", "radiator", "ac_unit", "stairs", "stairs_u", "robot_vacuum", "printer_3d"],
@@ -1635,6 +1649,7 @@ export const ELECTRIC_FURNITURE = new Set<string>([
   "fridge",
   "fridge_smart",
   "stove",
+  "oven",
   "kitchen_tall",
   "dishwasher",
   "washer",
@@ -1645,6 +1660,11 @@ export const ELECTRIC_FURNITURE = new Set<string>([
 ]);
 
 export type FurnitureType = (typeof FURNITURE_TYPES)[number];
+
+/** A plain fridge whose door opens in 3D with a door sensor (the smart fridge always has its doors as parts of their own). */
+export function fridgeDoorLinked(f: Pick<Furniture, "type" | "door_left">): boolean {
+  return f.type === "fridge" && !!f.door_left && f.door_left !== "none";
+}
 
 /** The fire opening of a built-in fireplace, in the item's local coordinates (x across, y up from the floor, z front = +d/2). */
 export function fireOpening(f: Pick<Furniture, "w" | "d" | "h" | "fire_height" | "fire_y">): { x0: number; x1: number; y0: number; y1: number; zBack: number; zFront: number } {
@@ -1699,6 +1719,7 @@ export const FURNITURE_SIZE: Record<FurnitureType, [number, number, number]> = {
   fridge_smart: [0.91, 0.73, 1.78],
   stairwell: [1.0, 2.6, 0.02],
   stove: [0.6, 0.62, 0.92],
+  oven: [0.6, 0.62, 0.92],
   sink: [0.9, 0.62, 0.92],
   bathtub: [1.7, 0.75, 0.58],
   shower: [0.9, 0.9, 2.0],

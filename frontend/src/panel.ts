@@ -10,6 +10,7 @@ import "./components/view3d.ts";
 import { languageReady, loadLanguage, translate, type I18nKey } from "./i18n.ts";
 import type { Building, StartView } from "./model.ts";
 import { controls, tokens } from "./styles.ts";
+import { infoStyles, renderInfoTiles } from "./info-view.ts";
 import type { HomeAssistant } from "./types.ts";
 import type { MarkerMode } from "./components/view3d.ts";
 import type { HeatMode } from "./heatmap.ts";
@@ -965,6 +966,7 @@ export class Floorplan3dPanel extends LitElement {
           ${this._navWrap ? "\u2194" : "\u2261"}
         </button>
       </nav>`}
+      ${this._clean || tt ? nothing : renderInfoTiles(this.hass, b)}
       <div class="fp3d-stage-wrap ${this._roomId ? "fp3d-room-open" : ""} ${this._controlsRight ? "fp3d-side-right" : ""} ${tt ? "fp3d-tt" : ""}">
         <fp3d-view3d
           class="fp3d-body"
@@ -1189,6 +1191,7 @@ export class Floorplan3dPanel extends LitElement {
   static styles = [
     tokens,
     controls,
+    infoStyles,
     css`
       .fp3d-gift-veil {
         position: fixed;
