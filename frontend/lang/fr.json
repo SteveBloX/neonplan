@@ -1579,6 +1579,7 @@
  "printer_trust": "Faire confiance à ce certificat",
  "printer_trusted": "Certificat épinglé : {fp}",
  "printer_test": "Tester",
+ "printer_busy": "Un instant…",
  "printer_test_ok": "{name} : {n} triangles",
  "printer_err_not_set": "L'adresse et le code d'accès manquent.",
  "printer_err_not_trusted": "Certificat pas encore confirmé.",

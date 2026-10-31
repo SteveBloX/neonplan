@@ -12139,7 +12139,8 @@ export class Fp3dEditor extends LitElement {
     const reason = (err: unknown): string => {
       const text = String((err as { message?: string })?.message ?? err);
       const known = ["not_set", "not_trusted", "certificate_changed", "login", "unreachable", "no_file", "too_big", "model", "ftp"];
-      return known.includes(text) ? this.t(`printer_err_${text}` as I18nKey) : text;
+      const [code, ...detail] = text.split(": ");
+      return known.includes(code) ? this.t(`printer_err_${code}` as I18nKey) + (detail.length ? ` (${detail.join(": ")})` : "") : text;
     };
     const short = (fp: string) => fp.match(/.{2}/g)?.slice(0, 8).join(":").toUpperCase() + "…";
     const save = async (extra: { fingerprint?: string } = {}) => {
@@ -12182,7 +12183,7 @@ export class Fp3dEditor extends LitElement {
       <div class="fp3d-row fp3d-wide">
         <button class="fp3d-btn" ?disabled=${form.busy} @click=${() => void save()}>${this.t("printer_access_save")}</button>
         <button class="fp3d-btn" ?disabled=${form.busy || !saved?.host} @click=${() => void check()}>${this.t("printer_trust_check")}</button>
-        <button class="fp3d-btn" ?disabled=${form.busy || !saved?.fingerprint || !saved.has_code} @click=${() => void test()}>${this.t("printer_test")}</button>
+        <button class="fp3d-btn" ?disabled=${form.busy || !saved?.fingerprint} @click=${() => void test()}>${this.t("printer_test")}</button>
       </div>
       ${form.pending
         ? html`<p class="fp3d-sub fp3d-wide">${form.pending.match(/.{2}/g)?.join(":").toUpperCase()}</p>
@@ -12190,7 +12191,7 @@ export class Fp3dEditor extends LitElement {
         : saved?.fingerprint
           ? html`<p class="fp3d-sub fp3d-wide">${this.t("printer_trusted", { fp: short(saved.fingerprint) })}</p>`
           : nothing}
-      ${form.msg ? html`<p class="fp3d-sub fp3d-wide" role="status">${form.msg}</p>` : nothing}`;
+      ${form.busy || form.msg ? html`<p class="fp3d-sub fp3d-wide" role="status">${form.busy ? this.t("printer_busy") : form.msg}</p>` : nothing}`;
   }
 
   /** A built-in fireplace: how tall the fire opening is and how high above the floor it starts. */

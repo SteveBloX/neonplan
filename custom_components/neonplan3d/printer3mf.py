@@ -230,8 +230,20 @@ def read_model(data: bytes) -> dict[str, Any]:
                 if obj.mesh is not None:
                     _flatten(files, name, object_id, IDENTITY, verts, tris)
     if not tris:
-        raise ModelError("no triangles in the file")
+        raise ModelError(f"no triangles in the file ({_describe(data, files, items)})")
     return pack(*thin(verts, tris))
+
+
+def _describe(data: bytes, files: dict[str, dict[str, _Object]], items: list[tuple[str, Matrix]]) -> str:
+    """What a file without a usable part holds, short enough for a message: its biggest members and what its models list."""
+    with zipfile.ZipFile(io.BytesIO(data)) as archive:
+        members = sorted(archive.infolist(), key=lambda i: -i.file_size)[:6]
+        parts = [f"{i.filename} {i.file_size // 1024}K" for i in members]
+    for name, objects in files.items():
+        meshes = sum(1 for o in objects.values() if o.mesh is not None)
+        comps = sum(len(o.components) for o in objects.values())
+        parts.append(f"{name}: {len(objects)} objects, {meshes} meshes, {comps} components, {len(items) if name == next(iter(files)) else 0} items")
+    return "; ".join(parts)
 
 
 def pack(verts: array, tris: array) -> dict[str, Any]:

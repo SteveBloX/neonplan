@@ -112,6 +112,18 @@ def test_files_that_are_no_model_are_refused() -> None:
         raise AssertionError("accepted")
 
 
+def test_a_file_without_a_part_says_what_it_holds() -> None:
+    main = f'<model {NS}><resources><object id="1"><components><component p:path="/3D/Objects/gone.model" objectid="1"/></components></object></resources><build><item objectid="1"/></build></model>'
+    data = _zip({"3D/3dmodel.model": main, "Metadata/plate_1.gcode": "G1 X1 Y1 E1\n" * 2000})
+    try:
+        p3.read_model(data)
+    except p3.ModelError as err:
+        text = str(err)
+        assert "plate_1.gcode" in text and "1 objects, 0 meshes, 1 components, 1 items" in text
+    else:
+        raise AssertionError("accepted")
+
+
 def test_the_file_of_a_job_is_found_whatever_the_slicer_made_of_its_name() -> None:
     names = ["/cache/Boat v2.gcode.3mf", "/cache/other_print.gcode.3mf", "/notes.txt"]
     assert ftp.pick(names, "Boat_v2") == "/cache/Boat v2.gcode.3mf"

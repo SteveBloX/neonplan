@@ -187,9 +187,10 @@ async def ws_model(hass: HomeAssistant, connection: websocket_api.ActiveConnecti
             connection.send_error(msg["id"], "printer_error", str(err))
             return
         except ModelError as err:
-            printers.failed[fid] = (job, time.monotonic(), "model")
-            _LOGGER.debug("The file of the print of %s has no usable part: %s", fid, err)
-            connection.send_error(msg["id"], "printer_error", "model")
+            reason = f"model: {err}"
+            printers.failed[fid] = (job, time.monotonic(), reason)
+            _LOGGER.warning("The file %s of the print of %s has no usable part: %s", name, fid, err)
+            connection.send_error(msg["id"], "printer_error", reason)
             return
         except Exception:  # noqa: BLE001 - a file from the printer must never take the card down
             _LOGGER.warning("Reading the file of the print of %s failed", fid, exc_info=True)
