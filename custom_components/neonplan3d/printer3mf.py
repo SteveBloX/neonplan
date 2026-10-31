@@ -2,7 +2,11 @@
 
 A Bambu Lab `.gcode.3mf` is a zip: `3D/3dmodel.model` lists the objects of the plate (a build item per object, each a
 mesh or components that point into `3D/Objects/*.model`), in millimetres and with a 3x4 transform per item. This module
-flattens all of that into one triangle list, thins it to a few ten thousand triangles and packs it:
+flattens all of that into one triangle list, thins it to a few ten thousand triangles and packs it.
+
+The file a printer holds is usually stripped of its model: only the G-code is left. Then the part is rebuilt from the
+G-code's outer walls (the printed outline of each layer, as thin vertical ribbons), which is what the printer prints
+anyway. Either way the result is packed like this:
 
 * `verts`: uint16 x, y, z per vertex, scaled into the bounding box,
 * `idx`: uint32 vertex numbers, three per triangle, the triangles sorted by their lowest point so that a renderer shows
@@ -16,11 +20,14 @@ from __future__ import annotations
 from array import array
 import base64
 import io
+import math
+import re
 import sys
 from typing import Any
 import xml.etree.ElementTree as ET
 import zipfile
 
+MAX_GCODE = 150 * 1024 * 1024  # bytes of the G-code once unpacked
 MAX_ARCHIVE_MEMBER = 400 * 1024 * 1024  # bytes of one model file once unpacked
 MAX_INPUT_TRIANGLES = 4_000_000
 MAX_TRIANGLES = 50_000  # what is sent
@@ -208,6 +215,8 @@ def read_model(data: bytes) -> dict[str, Any]:
         names = _model_files(archive)
         if not names:
             raise ModelError("no model in the file")
+        gcodes = sorted(n for n in archive.namelist() if n.lower().endswith(".gcode"))
+        gcode = archive.read(gcodes[0]) if gcodes and archive.getinfo(gcodes[0]).file_size <= MAX_GCODE else None
         files: dict[str, dict[str, _Object]] = {}
         items: list[tuple[str, Matrix]] = []
         main = names[0]
@@ -229,9 +238,177 @@ def read_model(data: bytes) -> dict[str, Any]:
             for object_id, obj in objects.items():
                 if obj.mesh is not None:
                     _flatten(files, name, object_id, IDENTITY, verts, tris)
+    if not tris and gcode is not None:
+        try:
+            verts, tris = read_gcode(gcode)
+        except ModelError as err:
+            raise ModelError(f"{err} ({_describe(data, files, items)})") from err
+        return pack(verts, tris)
     if not tris:
         raise ModelError(f"no triangles in the file ({_describe(data, files, items)})")
     return pack(*thin(verts, tris))
+
+
+_COMMENT = re.compile(rb"^\s*([a-z_]+)\s*:\s*(.*?)\s*$")
+_WORD = re.compile(rb"([XYZEIJ])(-?\d*\.?\d+)")
+_WALLS = (b"outer wall", b"overhang wall")
+_ARC_STEP = 0.5  # mm of arc between two points
+
+
+def _arc(x: float, y: float, tx: float, ty: float, i: float, j: float, clockwise: bool) -> list[tuple[float, float]]:
+    """The points of a G2/G3 arc after its start (the end point included)."""
+    cx, cy = x + i, y + j
+    radius = math.hypot(i, j)
+    a0 = math.atan2(y - cy, x - cx)
+    a1 = math.atan2(ty - cy, tx - cx)
+    if clockwise:
+        if a1 >= a0 - 1e-9:
+            a1 -= 2 * math.pi
+    elif a1 <= a0 + 1e-9:
+        a1 += 2 * math.pi
+    steps = max(2, int(abs(a1 - a0) * radius / _ARC_STEP) + 1)
+    out = [(cx + radius * math.cos(a0 + (a1 - a0) * k / steps), cy + radius * math.sin(a0 + (a1 - a0) * k / steps)) for k in range(1, steps)]
+    out.append((tx, ty))
+    return out
+
+
+def _simplify(points: list[tuple[float, float]], tolerance: float) -> list[tuple[float, float]]:
+    """Ramer-Douglas-Peucker: the points that keep a polyline within `tolerance` mm of itself."""
+    if len(points) < 3:
+        return points
+    keep = [False] * len(points)
+    keep[0] = keep[-1] = True
+    stack = [(0, len(points) - 1)]
+    while stack:
+        a, b = stack.pop()
+        ax, ay = points[a]
+        dx, dy = points[b][0] - ax, points[b][1] - ay
+        length = math.hypot(dx, dy)
+        best, far = -1, tolerance
+        for k in range(a + 1, b):
+            px, py = points[k]
+            d = abs(dy * (px - ax) - dx * (py - ay)) / length if length else math.hypot(px - ax, py - ay)
+            if d > far:
+                best, far = k, d
+        if best >= 0:
+            keep[best] = True
+            stack.append((a, best))
+            stack.append((best, b))
+    return [p for p, k in zip(points, keep, strict=True) if k]
+
+
+def read_gcode(data: bytes, limit: int = MAX_TRIANGLES) -> tuple[array, array]:
+    """The outer walls of a print's G-code as vertical ribbons: a layer is a ribbon of its height along each wall loop.
+
+    Reads the comments of Bambu Studio (`; CHANGE_LAYER`, `; Z_HEIGHT:`, `; LAYER_HEIGHT:`, `; FEATURE: Outer wall`) and of
+    Orca and Prusa (`;LAYER_CHANGE`, `;Z:`, `;HEIGHT:`, `;TYPE:Outer wall`). A print with more wall segments than `limit`
+    allows is drawn with several layers to a ribbon.
+    """
+    layers: list[dict[str, Any]] = []  # z, h, chains (lists of points)
+    layer: dict[str, Any] | None = None
+    walls = False
+    x = y = last_e = 0.0
+    relative = True
+    chain: list[tuple[float, float]] | None = None
+    keys: set[str] = set()
+    for raw in data.split(b"\n"):
+        if not raw:
+            continue
+        head = raw[0]
+        if head == 59:  # ;
+            m = _COMMENT.match(raw[1:].lower())
+            if m is None:
+                if raw[1:].strip().lower() in (b"change_layer", b"layer_change"):
+                    layer = {"z": None, "h": None, "chains": []}
+                    layers.append(layer)
+                    chain = None
+                continue
+            key, value = m.group(1), m.group(2)
+            if len(keys) < 40:
+                keys.add(key.decode("ascii", "replace"))
+            if key in (b"feature", b"type"):
+                walls = value in _WALLS
+                chain = None
+            elif layer is not None and key in (b"z_height", b"z"):
+                try:
+                    layer["z"] = float(value)
+                except ValueError:
+                    pass
+            elif layer is not None and key in (b"layer_height", b"height"):
+                try:
+                    layer["h"] = float(value)
+                except ValueError:
+                    pass
+            continue
+        if head == 77:  # M
+            if raw.startswith(b"M82"):
+                relative = False
+            elif raw.startswith(b"M83"):
+                relative = True
+            continue
+        if head != 71 or not raw.startswith((b"G0 ", b"G1 ", b"G2 ", b"G3 ", b"G92")):  # G
+            continue
+        values = {k: float(v) for k, v in _WORD.findall(raw.split(b";", 1)[0])}
+        if raw.startswith(b"G92"):
+            if b"E" in values:
+                last_e = values[b"E"]
+            continue
+        nx, ny, ne = values.get(b"X", x), values.get(b"Y", y), values.get(b"E")
+        extruding = False
+        if ne is not None:
+            extruding = ne > 0 if relative else ne > last_e + 1e-9
+            if not relative:
+                last_e = ne
+        arc = raw.startswith((b"G2 ", b"G3 "))
+        if extruding and walls and layer is not None and (arc or nx != x or ny != y):
+            if arc:
+                points = _arc(x, y, nx, ny, values.get(b"I", 0.0), values.get(b"J", 0.0), raw.startswith(b"G2 "))
+            else:
+                points = [(nx, ny)]
+            if chain is None or math.hypot(chain[-1][0] - x, chain[-1][1] - y) > 1e-3:
+                chain = [(x, y)]
+                layer["chains"].append(chain)
+            chain.extend(points)
+        else:
+            chain = None
+        x, y = nx, ny
+    return _ribbons(layers, limit, keys)
+
+
+def _ribbons(layers: list[dict[str, Any]], limit: int, keys: set[str]) -> tuple[array, array]:
+    """Vertical ribbons along the wall chains; the layers are merged when there would be too many."""
+    previous = 0.0
+    usable = []
+    for layer in layers:
+        z = layer["z"]
+        if z is None or not layer["chains"]:
+            continue
+        h = layer["h"] if layer["h"] else max(0.05, z - previous)
+        previous = z
+        usable.append((z, h, layer["chains"]))
+    if not usable:
+        raise ModelError("no wall paths in the G-code (comments seen: " + ", ".join(sorted(keys)) + ")")
+    budget = max(1, limit // 4)  # a segment is a ribbon of two triangles, drawn from both sides
+    tolerance = 0.15
+    simple = [(z, h, [_simplify(c, tolerance) for c in chains]) for z, h, chains in usable]
+    total = sum(len(c) - 1 for _, _, chains in simple for c in chains)
+    group = max(1, -(-total // budget))
+    verts = array("f")
+    tris = array("I")
+    for start in range(0, len(simple), group):
+        block = simple[start : start + group]
+        z_top, _, chains = block[-1]
+        z_bottom = block[0][0] - block[0][1]
+        for chain in chains:
+            base = len(verts) // 3
+            for px, py in chain:
+                verts.extend((px, py, z_bottom, px, py, z_top))
+            for k in range(len(chain) - 1):
+                a0, a1, b0, b1 = base + 2 * k, base + 2 * k + 1, base + 2 * k + 2, base + 2 * k + 3
+                tris.extend((a0, b0, b1, a0, b1, a1, a0, b1, b0, a0, a1, b1))
+    if not tris:
+        raise ModelError("no wall paths in the G-code")
+    return verts, tris
 
 
 def _describe(data: bytes, files: dict[str, dict[str, _Object]], items: list[tuple[str, Matrix]]) -> str:

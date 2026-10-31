@@ -124,6 +124,74 @@ def test_a_file_without_a_part_says_what_it_holds() -> None:
         raise AssertionError("accepted")
 
 
+BAMBU_GCODE = """; HEADER_BLOCK_START
+M83
+G1 X1 Y1 E0.5
+; CHANGE_LAYER
+; Z_HEIGHT: 0.2
+; LAYER_HEIGHT: 0.2
+; FEATURE: Outer wall
+G1 X10 Y10 F3000
+G1 X30 Y10 E1
+G1 X30 Y30 E1
+G1 X10 Y30 E1
+G1 X10 Y10 E1
+; FEATURE: Sparse infill
+G1 X15 Y15 F3000
+G1 X25 Y25 E1
+; CHANGE_LAYER
+; Z_HEIGHT: 0.4
+; LAYER_HEIGHT: 0.2
+; FEATURE: Outer wall
+G1 X10 Y10 F3000
+G1 X30 Y10 E1
+G1 X30 Y30 E1
+G1 X10 Y30 E1
+G1 X10 Y10 E1
+"""
+
+PRUSA_ARC = """;LAYER_CHANGE
+;Z:0.3
+;HEIGHT:0.3
+;TYPE:Outer wall
+G1 X20 Y10 F3000
+G3 X20 Y10 I-10 J0 E2
+"""
+
+
+def test_a_stripped_file_is_rebuilt_from_the_walls_of_its_gcode() -> None:
+    data = _zip({"3D/3dmodel.model": f"<model {NS}><resources/><build/></model>", "Metadata/plate_1.gcode": BAMBU_GCODE})
+    model = p3.read_model(data)
+    # four wall segments in two layers, a ribbon is two triangles drawn from both sides
+    assert model["triangles"] == 4 * 2 * 4
+    assert model["bbox"] == [10, 10, 0, 30, 30, 0.4] or all(abs(a - b) < 1e-6 for a, b in zip(model["bbox"], [10, 10, 0, 30, 30, 0.4]))
+
+
+def test_arcs_are_followed_and_other_slicers_comments_are_read() -> None:
+    verts, tris = p3.read_gcode(PRUSA_ARC.encode())
+    xs = verts[0::3]
+    ys = verts[1::3]
+    assert abs(min(xs) - 0) < 0.2 and abs(max(xs) - 20) < 0.2, "a full circle of radius 10 around (10, 10)"
+    assert abs(min(ys) - 0) < 0.2 and abs(max(ys) - 20) < 0.2
+    assert len(tris) > 3 * 12
+
+
+def test_too_many_walls_are_drawn_with_several_layers_to_a_ribbon() -> None:
+    layers = "".join(f"; CHANGE_LAYER\n; Z_HEIGHT: {0.2 * (n + 1):.1f}\n; LAYER_HEIGHT: 0.2\n; FEATURE: Outer wall\nG1 X10 Y10 F3000\nG1 X30 Y10 E1\nG1 X30 Y30 E1\nG1 X10 Y30 E1\nG1 X10 Y10 E1\n" for n in range(40))
+    verts, tris = p3.read_gcode(("M83\n" + layers).encode(), limit=4 * 4 * 8)
+    assert len(tris) // 3 <= 4 * 4 * 8
+    assert max(verts[2::3]) > 7.9, "still as tall as the print"
+
+
+def test_a_gcode_without_walls_says_what_it_has() -> None:
+    try:
+        p3.read_gcode(b"M83\n; hello: world\nG1 X1 Y1 E1\n")
+    except p3.ModelError as err:
+        assert "hello" in str(err)
+    else:
+        raise AssertionError("accepted")
+
+
 def test_the_file_of_a_job_is_found_whatever_the_slicer_made_of_its_name() -> None:
     names = ["/cache/Boat v2.gcode.3mf", "/cache/other_print.gcode.3mf", "/notes.txt"]
     assert ftp.pick(names, "Boat_v2") == "/cache/Boat v2.gcode.3mf"
