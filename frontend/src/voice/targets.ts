@@ -77,6 +77,7 @@ export const SYNONYMS: Record<string, string[]> = {
   fireplace: ["kamin", "ofen", "cheminée", "cheminee", "poêle", "fireplace", "fire"],
   parking: ["auto", "wagen", "stellplatz", "car", "parking"],
   bbq: ["grill", "barbecue", "bbq", "plancha"],
+  nest_hub: ["nest hub", "google hub", "smart display", "bildschirm", "écran"],
   led_strip: ["led", "led streifen", "lichtleiste", "led strip"],
   wall_socket: ["steckdose", "socket", "outlet"],
   wall_switch: ["lichtschalter", "schalter", "light switch", "switch"],

@@ -107,6 +107,7 @@ const BASIC: Record<string, [Kind, Room[]]> = {
   lounger: ["seating", ["garden"]],
   parasol: ["deco", ["garden"]],
   bbq: ["appliance", ["garden"]],
+  nest_hub: ["media", ["living", "bedroom", "kitchen", "office"]],
   garden_shed: ["storage", ["garden"]],
   hammock: ["seating", ["garden"]],
   egg_chair: ["seating", ["living", "bedroom", "garden"]],

@@ -947,6 +947,7 @@ export class Fp3dView3d extends LitElement {
         onFloorTap: (floorId) => this.fire("floor-tap", { floorId }),
         onSolarTap: (fieldId, cell) => this.onSolarTap(fieldId, cell),
         onSpaTap: (areaId, x, y) => this.onSpaTap(areaId, x, y),
+        onMediaControl: (entity, action) => this.onMediaControl(entity, action),
         floorInfo: (floor) =>
           floor.rooms.length === 1 ? translate(this.hass, "floor_rooms_one") : translate(this.hass, "floor_rooms", { n: floor.rooms.length }),
         onBack: () => this.fire("back", {}),
@@ -1179,6 +1180,8 @@ export class Fp3dView3d extends LitElement {
     const carSpots = new Set(
       hasFeature("auto_pro") ? b.floors.flatMap((fl) => fl.furniture.filter((f) => f.type === "parking" && f.car && parkedVehicle(hass, f)).map((f) => f.id)) : [],
     );
+    // items that asked for the playing card (fork): their pin steps aside while it shows
+    const cardIds = new Set(b.floors.flatMap((fl) => fl.furniture.filter((f) => f.media_card && !(f.media_on_screen && hasScreen(f.type))).map((f) => f.id)));
     v.setDevices([
       ...[...deviceMarkers, ...furniture.markers, ...this.lockMarkers(hass, b)].map((m) => {
         // "without watts" drops the power badge (a plug shows only on / off)
@@ -1189,7 +1192,7 @@ export class Fp3dView3d extends LitElement {
         // the own name under the pin: per device, or for every named device (card option marker_names)
         const caption = m.ownName && (m.showName || this.markerNames) ? m.ownName : "";
         // Klang & Kino: while a card floats over the speaker, its pin steps aside (it comes back when the music stops)
-        const carded = (hasFeature("sound") && this.mediaCardUp(hass, m.id)) || (hasFeature("auto_pro") && !!m.furnitureId && carSpots.has(m.furnitureId));
+        const carded = ((hasFeature("sound") || (!!m.furnitureId && cardIds.has(m.furnitureId))) && this.mediaCardUp(hass, m.id)) || (hasFeature("auto_pro") && !!m.furnitureId && carSpots.has(m.furnitureId));
         // a lock at its door asks for its text itself (full): the symbol mode does not take that away
         return { ...marker, pin: this.showPin(marker) && !carded, full: m.show === "always" || m.full === true, caption };
       }),
@@ -1404,7 +1407,9 @@ export class Fp3dView3d extends LitElement {
     // Klang & Kino: a now-playing card over every speaker or media furniture that plays, rings around it,
     // and lines between the members of a multiroom group
     const sound: SoundSource[] = [];
-    if (hasFeature("sound")) {
+    // (fork: without the add-on, an item that asks for it – "show what it plays" in its settings – gets the card; no rings, no lines)
+    const proSound = hasFeature("sound");
+    if (proSound || b.floors.some((fl) => fl.furniture.some((m) => m.media_card))) {
       const seenMedia = new Set<string>();
       const holoSize = (b.settings.roof.hologram ?? DEFAULT_HOLOGRAM).size;
       const add = (floor: Building["floors"][number], id: string, x: number, z: number, top: number, name: string) => {
@@ -1463,13 +1468,16 @@ export class Fp3dView3d extends LitElement {
       const furn = (floor: Building["floors"][number], byHand: boolean) => {
         for (const f of floor.furniture) {
           if ((f.entity != null && f.entity !== "none") !== byHand) continue;
+          // shown on its own screen instead; and without the add-on only what asked for the card
+          if ((f.media_card && f.media_on_screen && hasScreen(f.type)) || (!proSound && !f.media_card)) continue;
           const e = this.furnitureLinks?.get(f.id)?.entity;
           if (e) add(floor, e, f.x, f.z, mountBase(floor, f) + f.h, f.name || furnitureName(hass, f.type));
         }
       };
       for (const floor of b.floors) furn(floor, true);
-      for (const floor of b.floors) for (const pl of floor.placements) add(floor, pl.entity_id, pl.x, pl.z, pl.y ?? 1.1, pl.name || entityName(hass, pl.entity_id));
+      if (proSound) for (const floor of b.floors) for (const pl of floor.placements) add(floor, pl.entity_id, pl.x, pl.z, pl.y ?? 1.1, pl.name || entityName(hass, pl.entity_id));
       for (const floor of b.floors) furn(floor, false);
+      if (!proSound) sound.length = 0;
     }
     // free for everyone: an info card on every solar field while the roof is shown, and one on the module that was tapped
     {
@@ -3054,8 +3062,10 @@ export class Fp3dView3d extends LitElement {
           // many TV integrations (Samsung, LG) only report "on", never "playing": on is lit, dimmed
           const tvOn = kindOf(st.entity_id) === "media" && ["playing", "on", "paused", "idle"].includes(st.state);
           const color = live && kindOf(st.entity_id) === "media" ? appColor(st) : lit ? lit.color : isActive(st) || tvOn ? ([0.22, 0.88, 1] as [number, number, number]) : null;
-          const picture = live && kindOf(st.entity_id) === "media" ? ((st.attributes.entity_picture as string | undefined) ?? null) : null;
-          if (color) screens.set(f.id, { color, level: st.state === "playing" ? 1 : 0.6, picture, ring: ringed && hasFeature("sound") && st.state === "playing" });
+          // (fork) an item set to show what it plays on its own screen gets the picture and the buttons, add-on or not
+          const onScreen = !!f.media_card && !!f.media_on_screen && kindOf(st.entity_id) === "media";
+          const picture = (live || onScreen) && kindOf(st.entity_id) === "media" ? ((st.attributes.entity_picture as string | undefined) ?? null) : null;
+          if (color) screens.set(f.id, { color, level: st.state === "playing" ? 1 : 0.6, picture, ring: ringed && hasFeature("sound") && st.state === "playing", ...(onScreen && !isUnavailable(st) ? { media: { entity: st.entity_id, playing: st.state === "playing" } } : {}) });
         }
         if (placed.has(id)) continue;
         taken.add(id);
@@ -5572,6 +5582,21 @@ export class Fp3dView3d extends LitElement {
     const floor = this.building?.floors.find((f) => f.id === m.floorId);
     const f = floor?.furniture.find((x) => x.id === m.furnitureId);
     if (floor && f) this.viewer?.focus(floor.id, f.x, f.z, mountBase(floor, f) + f.h * 0.6, `module:${m.id}`);
+  }
+
+  /**
+   * A tap on one of the buttons drawn on a player's screen: previous, play or pause, next. Like the card's buttons: play
+   * and pause by their own services (some players ignore play_pause), a refused command shows as Home Assistant's notice.
+   */
+  private onMediaControl(entity: string, action: "prev" | "play" | "next"): void {
+    const hass = this.hass;
+    const st = hass?.states[entity];
+    if (!hass || !st || this.ro) return;
+    const features = st.attributes.supported_features;
+    const can = (bit: number) => typeof features !== "number" || (features & bit) !== 0;
+    const playing = st.state === "playing";
+    const service = action === "prev" ? "media_previous_track" : action === "next" ? "media_next_track" : playing ? "media_pause" : can(16384) ? "media_play" : "media_play_pause";
+    void Promise.resolve(hass.callService("media_player", service, { entity_id: entity })).catch((err: unknown) => this.serviceFailed(`media_player.${service}`, err));
   }
 
   /** A tap on a spa's water or pump unit opens its controls; a second tap on it closes them. */

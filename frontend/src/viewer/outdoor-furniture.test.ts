@@ -4,7 +4,8 @@ import { FURNITURE_GROUPS, FURNITURE_SIZE, newFloor, type Floor, type Furniture 
 import { mountBase } from "../packs.ts";
 import { furnitureSymbol } from "../components/furniture2d.ts";
 import { GeoBuffer, LineBuffer } from "./geo.ts";
-import { pushFurniture, roundFootprint } from "./furniture.ts";
+import { hasScreen } from "../devices.ts";
+import { pushFurniture, roundFootprint, screenRect } from "./furniture.ts";
 
 const NEW = ["bar_l", "garden_chair", "garden_sofa", "lounger", "coffee_table_round", "parasol", "bbq", "garden_shed", "hammock", "egg_chair", "planter", "privacy_screen"] as const;
 const item = (type: string): Furniture => {
@@ -55,6 +56,19 @@ test("the kitchen and bathroom pieces are drawn too: a hood and a mirror hang, a
   assert.ok(Math.abs(mountBase(floor, { ...item("microwave"), x: 1, z: 1 }) - 0.91) < 1e-6, "on the worktop");
   assert.equal(mountBase(floor, { ...item("microwave"), x: 3, z: 3 }), 0, "on the floor elsewhere");
   assert.equal(mountBase(floor, item("range_hood")), 1.5);
+});
+
+test("the Nest Hub is a living-room display: drawn, on surfaces, with a screen for the media picture", () => {
+  const solid = new GeoBuffer();
+  pushFurniture(solid, new LineBuffer(), new GeoBuffer(), item("nest_hub"));
+  assert.ok(solid.count > 4);
+  assert.ok(FURNITURE_GROUPS.living.includes("nest_hub"));
+  assert.ok(hasScreen("nest_hub"));
+  const rect = screenRect(item("nest_hub"));
+  assert.ok(rect && rect.x1 > rect.x0 && rect.y1 > rect.y0);
+  const floor = { ...newFloor("eg", "EG", 0), rooms: [{ id: "r", name: "r", area_id: null, points: [[0, 0], [4, 0], [4, 4], [0, 4]], floor_material: "wood" }] } as Floor;
+  floor.furniture = [{ ...item("table"), x: 1, z: 1, w: 1.2, d: 0.8, h: 0.75 }];
+  assert.ok(Math.abs(mountBase(floor, { ...item("nest_hub"), x: 1, z: 1 }) - 0.75) < 1e-6, "on the table");
 });
 
 test("round things cast a round shadow", () => {

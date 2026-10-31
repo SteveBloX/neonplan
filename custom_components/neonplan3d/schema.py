@@ -356,6 +356,9 @@ FURNITURE_SCHEMA = vol.Schema(
         vol.Optional("pictures", default=[]): vol.All([_SCREEN_PICTURE_SCHEMA], vol.Length(max=20)),
         # screens: the screen around a rule picture is dark (default) or white
         vol.Optional("screen_bg", default="black"): vol.In(["black", "white"]),
+        # a media player: a panel with what it plays and its buttons, or the same on the item's own screen
+        vol.Optional("media_card", default=False): bool,
+        vol.Optional("media_on_screen", default=False): bool,
         vol.Optional("vehicle", default=None): vol.Any(None, vol.All(str, vol.Length(max=96))),
         # Pool Pro: the sand filter's six-way valve and whether a ball valve is open
         vol.Optional("valve_position", default=None): vol.Any(

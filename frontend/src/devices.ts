@@ -897,11 +897,12 @@ const FURNITURE_NAMES: Record<string, RegExp> = {
   radiator: /(heiz|radiator|thermostat|climate|hk|trv)/i,
   ac_unit: /(klima|air ?con|aircon|airco|split|\bac\b|clim)/i,
   awning: /(markise|awning|sonnensegel|beschattung|store|zonnescherm)/i,
+  nest_hub: /(nest ?hub|nest_hub|google ?hub|home ?hub|smart ?display|echo ?show)/i,
   gate: /(portail|portillon|\btor\b|hoftor|einfahrt|gartentor|gate|poort|port\b)/i,
   printer_3d: /(print_status|3d|drucker|printer|imprimante|bambu)/i,
   fireplace: /(kamin|ofen|cheminée|cheminee|poêle|poele|fireplace|fire|haard|kachel)/i,
 };
-const MEDIA_FURNITURE = new Set(["tv_board", "tv_wall"]);
+const MEDIA_FURNITURE = new Set(["tv_board", "tv_wall", "nest_hub"]);
 
 /** Whether a screen picture rule matches now: the state or attribute equals the value, or contains it (3+ chars); "*" always. */
 export function pictureRuleMatches(hass: HomeAssistant, rule: { entity: string; attribute?: string | null; state: string }): boolean {

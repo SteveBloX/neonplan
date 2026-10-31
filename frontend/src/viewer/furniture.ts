@@ -1513,6 +1513,14 @@ function coffeeMachine(b: Builder, w: number, d: number, h: number): void {
   b.seg(-w / 2 + 0.04, h - 0.075, d / 2 - 0.042, w / 2 - 0.04, h - 0.075, d / 2 - 0.042, EDGE_GLOW);
 }
 
+/** A Google Nest Hub: a fabric base and a display slab standing on it, its glass facing the front (+z). */
+function nestHub(b: Builder, w: number, d: number, h: number): void {
+  const slab = 0.03;
+  b.box(-w * 0.42, w * 0.42, 0, h * 0.42, -d / 2, d / 2 - slab, C.fabric, C.fabricTop, EDGE_FURN);
+  b.box(-w / 2, w / 2, h * 0.3, h, d / 2 - slab, d / 2, C.dark, C.dark, EDGE_FURN);
+  b.box(-w / 2 + 0.008, w / 2 - 0.008, h * 0.3 + 0.008, h - 0.008, d / 2 - 0.002, d / 2 + 0.001, C.dark, C.dark, EDGE_GLOW);
+}
+
 /** A towel radiator on the wall (back at -z): two side tubes and many rungs. */
 function towelRadiator(b: Builder, w: number, d: number, h: number): void {
   const y0 = 0.25;
@@ -1821,6 +1829,8 @@ function builtInScreen(f: Furniture, w: number, d: number, h: number, floor?: Fl
     return { x0: -w / 2 + 0.02, x1: w / 2 - 0.02, y0: y0 + 0.02, y1: y0 + h - 0.02, z: d / 2 + 0.003 };
   }
   if (f.type === "desk") return { x0: -0.28, x1: 0.28, y0: h + 0.1, y1: h + 0.4, z: -d / 2 + 0.115 };
+  // a smart display: the glass of its front slab
+  if (f.type === "nest_hub") return { x0: -w / 2 + 0.008, x1: w / 2 - 0.008, y0: h * 0.3 + 0.008, y1: h - 0.008, z: d / 2 + 0.002 };
   if (f.type === "fridge_smart") {
     // the screen sits on the right door (mirrored: the door's u runs to the left from its hinge at +w/2)
     const base = floor ? mountBase(floor, f) : 0;
@@ -2185,6 +2195,9 @@ function buildFurniture(buf: GeoBuffer, lines: LineBuffer, shadow: GeoBuffer, f:
       return;
     case "towel_radiator":
       towelRadiator(b, w, d, h);
+      return;
+    case "nest_hub":
+      nestHub(b, w, d, h);
       return;
     case "microwave":
       microwave(b, w, d, h);

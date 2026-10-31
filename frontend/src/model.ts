@@ -318,6 +318,10 @@ export interface Furniture {
   pictures?: ScreenPicture[];
   /** Screens: what shows around a rule picture – a dark screen (default) or a white one (for dark logos). */
   screen_bg?: "black" | "white";
+  /** A media player (a TV, a smart display, a speaker): a panel over the item shows what it plays – cover, title and previous, pause, next. */
+  media_card?: boolean;
+  /** …on the item's own screen instead of a panel: the cover on the screen and the three buttons drawn at its bottom edge. */
+  media_on_screen?: boolean;
   /** Parking spots: the vehicle shown (a pack item type) while `entity` reports a car. */
   vehicle?: string | null;
   /** Auto Pro: the car's entities (each null = found on the device of `device`, or of the presence entity). */
@@ -1385,6 +1389,7 @@ export const FURNITURE_TYPES = [
   "coffee_table_round",
   "parasol",
   "bbq",
+  "nest_hub",
   "garden_shed",
   "hammock",
   "egg_chair",
@@ -1409,7 +1414,7 @@ export const FURNITURE_TYPES = [
 /** Furniture library sections (the editor lists them in this order). */
 export const FURNITURE_GROUPS: Record<string, FurnitureType[]> = {
   lights: ["lamp_ceiling", "lamp_downlight", "lamp_spot", "lamp_panel", "lamp_pendant", "lamp_fan", "lamp_floor", "lamp_uplight", "lamp_table", "lamp_wall", "led_strip", "lamp_bollard", "lamp_garden"],
-  living: ["sofa", "sofa_l", "sofa_u", "armchair", "egg_chair", "stool", "coffee_table", "tv_board", "tv_wall", "sideboard", "shelf", "fireplace", "wall_mirror", "plant", "rug"],
+  living: ["sofa", "sofa_l", "sofa_u", "armchair", "egg_chair", "stool", "coffee_table", "tv_board", "tv_wall", "nest_hub", "sideboard", "shelf", "fireplace", "wall_mirror", "plant", "rug"],
   dining: ["table", "table_round", "chair", "bench", "corner_bench", "bar_stool"],
   kitchen: ["kitchen", "kitchen_wall", "kitchen_tall", "island", "worktop", "sink", "stove", "oven", "range_hood", "microwave", "coffee_machine", "dishwasher", "fridge"],
   sleeping: ["bed", "bunk_bed", "nightstand", "wardrobe", "dresser"],
@@ -1665,7 +1670,7 @@ export function techBase(f: { type: string; variant?: string | null; h: number }
 }
 
 /** Small appliances that stand on whatever surface is under them (a worktop, a table), like a table lamp. */
-export const ON_SURFACE = new Set<string>(["microwave", "coffee_machine"]);
+export const ON_SURFACE = new Set<string>(["microwave", "coffee_machine", "nest_hub"]);
 
 export const ELECTRIC_FURNITURE = new Set<string>([
   ...LAMP_TYPES,
@@ -1674,6 +1679,7 @@ export const ELECTRIC_FURNITURE = new Set<string>([
   "range_hood",
   "microwave",
   "coffee_machine",
+  "nest_hub",
   "ac_unit",
   "awning",
   "gate",
@@ -1804,6 +1810,8 @@ export const FURNITURE_SIZE: Record<FurnitureType, [number, number, number]> = {
   egg_chair: [0.95, 0.85, 2.2],
   planter: [1.2, 0.8, 0.5],
   privacy_screen: [1.8, 0.06, 1.8],
+  // a smart display (Google Nest Hub): it stands on a table or a worktop
+  nest_hub: [0.18, 0.1, 0.12],
   // kitchen: a hood over the hob (h = the whole hood, it hangs from 1.5 m), a microwave and a coffee machine standing on the worktop
   range_hood: [0.9, 0.5, 0.85],
   microwave: [0.5, 0.38, 0.3],

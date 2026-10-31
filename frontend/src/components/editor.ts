@@ -12468,6 +12468,20 @@ export class Fp3dEditor extends LitElement {
             </div>
             <p class="fp3d-sub">${this.t("fridge_door_hint")}</p>`
         : nothing}
+      ${media || (!!f.entity && f.entity !== "none" && kindOf(f.entity) === "media")
+        ? html`<div class="fp3d-form fp3d-links">
+            <label class="fp3d-check fp3d-wide" title=${this.t("media_card_hint")}
+              ><input type="checkbox" .checked=${!!f.media_card} ?disabled=${!this.isAdmin} @change=${(ev: Event) => this.updateFurniture({ media_card: (ev.target as HTMLInputElement).checked || undefined })} />
+              ${this.t("media_card")}</label
+            >
+            ${f.media_card && hasScreen(f.type)
+              ? html`<label class="fp3d-check fp3d-wide" title=${this.t("media_on_screen_hint")}
+                  ><input type="checkbox" .checked=${!!f.media_on_screen} ?disabled=${!this.isAdmin} @change=${(ev: Event) => this.updateFurniture({ media_on_screen: (ev.target as HTMLInputElement).checked || undefined })} />
+                  ${this.t("media_on_screen")}</label
+                >`
+              : nothing}
+          </div>`
+        : nothing}
       ${hasScreen(f.type) ? this.renderPictureRules(f) : nothing}
       <p class="fp3d-sub">${this.t(lamp ? (f.type === "lamp_pendant" ? "lamp_hint_pendant" : "lamp_hint") : media ? "furn_links_hint_tv" : isRobotVacuum(f.type) ? "robot_hint" : "furn_links_hint")}</p>`;
   }

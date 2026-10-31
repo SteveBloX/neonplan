@@ -115,6 +115,8 @@ export function furnitureSymbol(type: string, w: number, d: number): Part[] | ty
       for (let i = 0; i < 8; i++) out.push(line(Math.cos((i / 8) * Math.PI * 2) * r * 0.5, Math.sin((i / 8) * Math.PI * 2) * r * 0.5, Math.cos((i / 8) * Math.PI * 2) * r, Math.sin((i / 8) * Math.PI * 2) * r));
       return out;
     }
+    case "nest_hub":
+      return [rect(-w / 2, d / 2 - 0.03, w / 2, d / 2, "fp3d-sym-fill"), rect(-w * 0.42, -d / 2, w * 0.42, d / 2 - 0.03)];
     case "garden_shed":
       // the ridge, and the door on the front
       return [line(0, -d / 2, 0, d / 2, "fp3d-sym-strong"), rect(-w / 2 + 0.3, d / 2 - 0.05, -w / 2 + 0.3 + Math.min(0.9, w * 0.38), d / 2)];

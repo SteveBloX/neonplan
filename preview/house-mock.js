@@ -66,6 +66,26 @@ export async function loadHouse(url) {
     const cover = new URLSearchParams(location.search).get("gazebotest") || "canvas";
     floor.outdoor = [...(floor.outdoor ?? []), { id: "outdoor_gazebo_test", type: "gazebo", points: [[7, 0.3], [10, 0.3], [10, 3.3], [7, 3.3]], cover, rise: 1, height: null, outline: true, offset: 0, slope: 0, slope_dir: "x", open: false, bracing: false, cut: false, pool_shape: null, above: false, depth: null, rim: null, pool: null, name: null, area_id: null }];
   }
+  // ?mediatest[=screen]: a Google Nest Hub and a TV board in the living room, both playing; the hub with a panel (or on its screen)
+  if (new URLSearchParams(location.search).has("mediatest")) {
+    const floor = building.floors[0];
+    const room = floor.rooms.find((r) => r.name === "Salon") ?? floor.rooms[0];
+    const xs = room.points.map((p) => p[0]);
+    const zs = room.points.map((p) => p[1]);
+    const cx = (Math.min(...xs) + Math.max(...xs)) / 2;
+    const cz = (Math.min(...zs) + Math.max(...zs)) / 2;
+    const onScreen = new URLSearchParams(location.search).get("mediatest") === "screen";
+    floor.furniture.push(
+      { id: "media_test_hub", type: "nest_hub", x: cx, z: cz, rotation: 0, w: 0.18, d: 0.1, h: 0.12, variant: null, entity: "media_player.test_nest_hub", media_card: true, ...(onScreen ? { media_on_screen: true } : {}) },
+      { id: "media_test_table", type: "table", x: cx, z: cz, rotation: 0, w: 1.0, d: 0.7, h: 0.75, variant: null },
+      { id: "media_test_tv", type: "tv_board", x: cx + 1.6, z: cz, rotation: 0, w: 1.4, d: 0.42, h: 0.5, variant: null, entity: "media_player.test_tv", media_card: true, ...(onScreen ? { media_on_screen: true } : {}) },
+    );
+    const art = "data:image/svg+xml;utf8," + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="300" height="300"><rect width="300" height="300" fill="#7a2cff"/><circle cx="150" cy="150" r="90" fill="#ffb347"/><text x="150" y="170" font-size="60" text-anchor="middle" fill="#220">♪</text></svg>');
+    for (const [id, title] of [["media_player.test_nest_hub", "Test Song"], ["media_player.test_tv", "Film de test"]]) {
+      states[id] = { entity_id: id, state: "playing", attributes: { friendly_name: id.split(".")[1].replace(/_/g, " "), media_title: title, media_artist: "Artist", entity_picture: art, volume_level: 0.4, supported_features: 152463 } };
+      entities[id] = { entity_id: id, area_id: null };
+    }
+  }
   // ?outdoortest: one of each piece of outdoor furniture on the lawn behind the house
   if (new URLSearchParams(location.search).has("outdoortest")) {
     const floor = building.floors[0];

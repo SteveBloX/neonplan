@@ -121,6 +121,8 @@ export interface ViewerOptions {
   onSolarTap?: (fieldId: string, cell: string) => void;
   /** Short tap on a spa's water or pump unit (its area id and the tap point on the stage). */
   onSpaTap?: (areaId: string, x: number, y: number) => void;
+  /** A tap on one of the three buttons drawn on a media player's own screen. */
+  onMediaControl?: (entity: string, action: "prev" | "play" | "next") => void;
   /** Double tap on a room of the opened floor (without it, a double tap goes one level back). */
   onRoomDoubleTap?: (floorId: string, roomId: string) => void;
   /** Long press on a device marker. */
@@ -290,6 +292,48 @@ export interface SoundSource {
   members: string[];
 }
 
+/** The strip of three buttons drawn on a media player's screen: previous, play (or pause while it plays), next. */
+function mediaButtonsTexture(playing: boolean): CanvasTexture {
+  const canvas = document.createElement("canvas");
+  canvas.width = 256;
+  canvas.height = 64;
+  const g = canvas.getContext("2d");
+  if (g) {
+    for (let i = 0; i < 3; i++) {
+      const cx = 32 + i * 96;
+      g.fillStyle = "rgba(8, 14, 26, 0.78)";
+      g.strokeStyle = "rgba(120, 220, 255, 0.9)";
+      g.lineWidth = 3;
+      g.beginPath();
+      g.arc(cx, 32, 27, 0, Math.PI * 2);
+      g.fill();
+      g.stroke();
+      g.fillStyle = "#e8f6ff";
+      const tri = (x: number, dir: 1 | -1) => {
+        g.beginPath();
+        g.moveTo(x + 10 * dir, 32);
+        g.lineTo(x - 7 * dir, 21);
+        g.lineTo(x - 7 * dir, 43);
+        g.closePath();
+        g.fill();
+      };
+      if (i === 0) {
+        tri(cx - 3, -1);
+        tri(cx + 8, -1);
+      } else if (i === 2) {
+        tri(cx - 8, 1);
+        tri(cx + 3, 1);
+      } else if (playing) {
+        g.fillRect(cx - 10, 20, 7, 24);
+        g.fillRect(cx + 3, 20, 7, 24);
+      } else tri(cx + 2, 1);
+    }
+  }
+  const tex = new CanvasTexture(canvas);
+  tex.colorSpace = SRGBColorSpace;
+  return tex;
+}
+
 export interface ScreenState {
   /** Light the item's glowing pack parts too (a smart speaker's ring while it plays). */
   ring?: boolean;
@@ -299,6 +343,8 @@ export interface ScreenState {
   picture?: string | null;
   /** No glow frame around the screen (a logo from a picture rule stands on its own). */
   plain?: boolean;
+  /** A media player shown on its own screen: the three buttons (previous, play or pause, next) are drawn at the bottom edge and can be tapped. */
+  media?: { entity: string; playing: boolean };
   /** Furniture with a state: glowing faces on top of the item instead of a screen – the whole top, or a half of it. */
   // (see also SoundSource below)
   // "gang": one rocker or socket of a wall switch or socket (`index` of `of`)
@@ -537,6 +583,8 @@ interface FloorView {
   spaGroup?: Group;
   /** Pictures shown on lit screens, by furniture id. */
   screenPics: Map<string, { url: string; mesh: Mesh; texture: Texture | null }>;
+  /** The buttons drawn on the screens that show a media player (by furniture id). */
+  mediaCtl: Map<string, { mesh: Mesh; playing: boolean; entity: string; texture: Texture }>;
   /** Content signatures: meshes are only rebuilt when these change. */
   flowLayout: string;
   glowSig: string;
@@ -2420,6 +2468,10 @@ export class FloorplanViewer {
         (pic.mesh.material as Material).dispose();
         pic.texture?.dispose();
       }
+      for (const c of fv.mediaCtl.values()) {
+        (c.mesh.material as Material).dispose();
+        c.texture.dispose();
+      }
       fv.group.traverse((o) => {
         const g = (o as Mesh).geometry as BufferGeometry | undefined;
         g?.dispose();
@@ -2996,6 +3048,7 @@ export class FloorplanViewer {
         screenMesh,
         screenSig: "",
         screenPics: new Map(),
+        mediaCtl: new Map(),
         flowLayout: "",
         glowSig: "",
         lampShapeSig: "",
@@ -3313,6 +3366,7 @@ export class FloorplanViewer {
       mat.transparent = fv.o < 0.999;
       mat.opacity = fv.o;
     }
+    for (const c of fv.mediaCtl.values()) (c.mesh.material as MeshBasicMaterial).opacity = fv.o;
   }
 
   /** Advance the floor animation; returns true while something still moves. */
@@ -4078,6 +4132,63 @@ export class FloorplanViewer {
     fv.screenMesh.geometry = buf.geometry();
     fv.screenMesh.visible = buf.count > 0;
     this.updateScreenPictures(fv, items);
+    this.updateMediaControls(fv, items);
+  }
+
+  /** The three buttons (previous, play or pause, next) on the screens that show a media player, as a strip at the screen's bottom edge. */
+  private updateMediaControls(fv: FloorView, items: Furniture[]): void {
+    const wanted = new Map(items.filter((f) => this.screens.get(f.id)?.media).map((f) => [f.id, f]));
+    for (const [id, c] of fv.mediaCtl) {
+      const m = this.screens.get(id)?.media;
+      if (wanted.has(id) && m && m.playing === c.playing && m.entity === c.entity) continue;
+      fv.group.remove(c.mesh);
+      c.mesh.geometry.dispose();
+      (c.mesh.material as Material).dispose();
+      c.texture.dispose();
+      fv.mediaCtl.delete(id);
+    }
+    for (const [id, f] of wanted) {
+      const r = screenRect(f, fv.floor);
+      const m = this.screens.get(id)?.media;
+      if (!r || !m) continue;
+      let c = fv.mediaCtl.get(id);
+      if (!c) {
+        const texture = mediaButtonsTexture(m.playing);
+        const mesh = new Mesh(new PlaneGeometry(1, 1), new MeshBasicMaterial({ map: texture, transparent: true, depthWrite: false, opacity: fv.o }));
+        mesh.renderOrder = 6;
+        c = { mesh, playing: m.playing, entity: m.entity, texture };
+        fv.mediaCtl.set(id, c);
+        fv.group.add(mesh);
+      }
+      // a strip four times as wide as high, as wide as most of the screen allows, on its lower part
+      const width = Math.min((r.x1 - r.x0) * 0.8, 0.5, (r.y1 - r.y0) * 4 * 0.5);
+      const height = width / 4;
+      const a = f.rotation * DEG;
+      const cx = (r.x0 + r.x1) / 2;
+      const z = r.z + 0.012;
+      c.mesh.scale.set(width, height, 1);
+      c.mesh.rotation.set(0, -a, 0);
+      c.mesh.position.set(f.x + cx * Math.cos(a) - z * Math.sin(a), r.y0 + height * 0.7, f.z + cx * Math.sin(a) + z * Math.cos(a));
+    }
+  }
+
+  /** The button under a screen point, if one of the drawn strips is hit first (a wall that hides the screen is in the way). */
+  private mediaControlAt(x: number, y: number): { entity: string; action: "prev" | "play" | "next" } | null {
+    const floors = this.activeFloors();
+    const strips = floors.flatMap((fv) => [...fv.mediaCtl.values()].filter((c) => c.mesh.visible).map((c) => ({ fv, c })));
+    if (!strips.length) return null;
+    const meshes = [...strips.map((s) => s.c.mesh), ...floors.map((fv) => fv.wallMesh).filter((m) => m.visible)];
+    for (const hit of this.rayAt(x, y).intersectObjects(meshes, false)) {
+      const strip = strips.find((s) => s.c.mesh === hit.object);
+      if (!strip) {
+        const fv = floors.find((f) => f.wallMesh === hit.object);
+        if (fv && hit.face && Math.abs(hit.face.normal.y) < 0.7 && this.opaqueWall(fv, hit.face.a)) return null;
+        continue;
+      }
+      const u = hit.uv?.x ?? 0.5;
+      return { entity: strip.c.entity, action: u < 0.34 ? "prev" : u > 0.66 ? "next" : "play" };
+    }
+    return null;
   }
 
   /** App icons or cover art on the screens, fitted into the screen with their own aspect ratio. */
@@ -4543,6 +4654,14 @@ export class FloorplanViewer {
   }
 
   private onTap(x: number, y: number): void {
+    // one of the three buttons drawn on a media player's screen
+    if (!this.furnish) {
+      const control = this.mediaControlAt(x, y);
+      if (control) {
+        this.options.onMediaControl?.(control.entity, control.action);
+        return;
+      }
+    }
     // a spa's water or pump unit opens its controls
     if (!this.furnish && this.spas.length) {
       const spa = this.pickSpa(x, y);
