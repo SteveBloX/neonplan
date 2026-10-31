@@ -1,4 +1,4 @@
-// Procedural low-poly furniture in the neon look. Every model is built from boxes and cylinders in
+﻿// Procedural low-poly furniture in the neon look. Every model is built from boxes and cylinders in
 // local coordinates (x across, z depth with the front at +z, y up) scaled to the item's size, then
 // rotated and moved into place. Solids go into the floor's wall buffer, main outlines into its line
 // buffer and a soft contact shadow into the shadow layer, so furniture adds no draw calls.
@@ -1284,6 +1284,257 @@ function roundTable(b: Builder, w: number, d: number, h: number): void {
   b.cyl(0, 0, r, h - 0.04, h, C.wood, C.woodTop, 20, EDGE_FURN);
 }
 
+/** A right-angled bar: a long arm along the back (-z) and a short one along the left (-x), 0.6 m deep, a stone top overhanging the inside. */
+function barL(b: Builder, w: number, d: number, h: number): void {
+  const t = Math.min(0.6, w * 0.4, d * 0.4);
+  const top = 0.05;
+  const over = 0.2;
+  // the carcasses are set back from the counter's inner edge by the overhang, so the stools can pull in
+  b.box(-w / 2, w / 2, 0, h - top, -d / 2, -d / 2 + t - over, C.body, C.bodyTop, EDGE_FURN);
+  b.box(-w / 2, -w / 2 + t - over, 0, h - top, -d / 2 + t - over, d / 2, C.body, C.bodyTop, EDGE_FURN);
+  b.box(-w / 2, w / 2, h - top, h, -d / 2, -d / 2 + t, C.whiteTop, C.whiteTop, EDGE_FURN);
+  b.box(-w / 2, -w / 2 + t, h - top, h, -d / 2 + t, d / 2, C.whiteTop, C.whiteTop, EDGE_FURN);
+  // doors on the fronts, a foot rail and a light under the overhang along the inner edges
+  fronts(b, -w / 2 + t - over, w / 2, 0.06, h - top - 0.02, -d / 2 + t - over, Math.max(2, Math.round((w - t) / 0.6)), h * 0.55);
+  for (const z of [-d / 2 + t + 0.6, -d / 2 + t + 1.2]) if (z < d / 2 - 0.1) b.seg(-w / 2 + t - over, 0.06, z, -w / 2 + t - over, h - top - 0.02, z, EDGE_FAINT);
+  b.seg(-w / 2 + t - over - 0.05, 0.22, -d / 2 + t - over - 0.05, w / 2, 0.22, -d / 2 + t - over - 0.05, EDGE_FAINT);
+  b.seg(-w / 2 + t, h - top - 0.015, -d / 2 + t, w / 2, h - top - 0.015, -d / 2 + t, EDGE_GLOW);
+  b.seg(-w / 2 + t, h - top - 0.015, -d / 2 + t, -w / 2 + t, h - top - 0.015, d / 2, EDGE_GLOW);
+}
+
+/** A garden chair: metal legs, a slatted seat with a cushion, a back with a cushion and two armrests. */
+function gardenChair(b: Builder, w: number, d: number, h: number): void {
+  const seat = 0.44;
+  legs(b, w, d, seat - 0.04, 0.035, 0.03, C.metal);
+  b.box(-w / 2, w / 2, seat - 0.04, seat, -d / 2, d / 2, C.wood, C.woodTop, EDGE_FURN);
+  b.box(-w / 2 + 0.03, w / 2 - 0.03, seat, seat + 0.07, -d / 2 + 0.12, d / 2 - 0.03, C.cushion, C.fabricTop, EDGE_FAINT);
+  for (const sx of [-1, 1]) {
+    b.box(sx * (w / 2 - 0.03) - 0.018, sx * (w / 2 - 0.03) + 0.018, seat, h, -d / 2, -d / 2 + 0.045, C.metal);
+    b.box(sx * (w / 2 - 0.02) - 0.02, sx * (w / 2 - 0.02) + 0.02, seat + 0.2, seat + 0.23, -d / 2 + 0.05, d / 2 - 0.06, C.metal);
+  }
+  b.box(-w / 2 + 0.05, w / 2 - 0.05, seat + 0.16, h - 0.04, -d / 2 + 0.02, -d / 2 + 0.11, C.cushion, C.fabricTop, EDGE_FURN);
+}
+
+/** An outdoor sofa: a wooden frame with arms, seat cushions and back cushions side by side. */
+function gardenSofa(b: Builder, w: number, d: number, h: number): void {
+  const seat = 0.4;
+  const arm = 0.16;
+  const back = 0.1;
+  legs(b, w, d, 0.1, 0.05, 0.03, C.wood);
+  b.box(-w / 2, w / 2, 0.1, seat - 0.08, -d / 2, d / 2, C.wood, C.woodTop, EDGE_FURN);
+  b.box(-w / 2, w / 2, 0.1, h - 0.08, -d / 2, -d / 2 + back, C.wood, C.woodTop, EDGE_FURN);
+  for (const sx of [-1, 1]) b.box(sx > 0 ? w / 2 - arm : -w / 2, sx > 0 ? w / 2 : -w / 2 + arm, 0.1, seat + 0.2, -d / 2 + back, d / 2, C.wood, C.woodTop, EDGE_FURN);
+  const n = Math.max(2, Math.round((w - 2 * arm) / 0.65));
+  const cw = (w - 2 * arm) / n;
+  for (let i = 0; i < n; i++) {
+    const x0 = -w / 2 + arm + cw * i + 0.01;
+    const x1 = x0 + cw - 0.02;
+    b.box(x0, x1, seat - 0.08, seat + 0.1, -d / 2 + back + 0.14, d / 2 - 0.02, C.cushion, C.fabricTop, EDGE_FURN);
+    b.box(x0, x1, seat + 0.1, h - 0.04, -d / 2 + back, -d / 2 + back + 0.17, C.cushion, C.fabricTop, EDGE_FURN);
+  }
+}
+
+/** A sun lounger, head end at -z: a low frame, a mattress that rises in three steps to the backrest. */
+function lounger(b: Builder, w: number, d: number, h: number): void {
+  const base = 0.22;
+  legs(b, w, d, base - 0.04, 0.04, 0.03, C.metal);
+  b.box(-w / 2, w / 2, base - 0.04, base, -d / 2, d / 2, C.wood, C.woodTop, EDGE_FURN);
+  const mat = base + 0.06;
+  const head = Math.min(0.8, d * 0.4);
+  b.box(-w / 2 + 0.03, w / 2 - 0.03, base, mat, -d / 2 + head, d / 2 - 0.02, C.cushion, C.fabricTop, EDGE_FURN);
+  for (let i = 0; i < 3; i++) {
+    const z0 = -d / 2 + (head / 3) * (2 - i);
+    const z1 = -d / 2 + (head / 3) * (3 - i);
+    b.box(-w / 2 + 0.03, w / 2 - 0.03, base, mat + (h - mat) * ((i + 1) / 3), z0, z1, C.cushion, C.fabricTop, EDGE_FURN);
+  }
+}
+
+/** A low round table: a round top on a column and a shelf underneath. */
+function roundCoffeeTable(b: Builder, w: number, d: number, h: number): void {
+  const r = Math.min(w, d) / 2;
+  b.cyl(0, 0, r * 0.5, 0, 0.025, C.metal, C.metal, 14);
+  b.cyl(0, 0, 0.035, 0.025, h - 0.04, C.metal, C.metal, 8);
+  b.cyl(0, 0, r * 0.78, h * 0.3, h * 0.3 + 0.02, C.wood, C.woodTop, 18, EDGE_FAINT);
+  b.cyl(0, 0, r, h - 0.04, h, C.wood, C.woodTop, 22, EDGE_FURN);
+}
+
+/** A parasol: a heavy foot, a pole and a canopy in steps up to the tip, with its ribs. */
+function parasol(b: Builder, w: number, d: number, h: number): void {
+  const r = Math.min(w, d) / 2;
+  b.cyl(0, 0, 0.28, 0, 0.06, C.metal, C.metal, 14, EDGE_FAINT);
+  b.cyl(0, 0, 0.025, 0.06, h, C.metal, C.metal, 6);
+  const y0 = h - 0.5;
+  const steps = [1, 0.84, 0.64, 0.42, 0.2];
+  steps.forEach((k, i) => b.cyl(0, 0, r * k, y0 + i * 0.1, y0 + (i + 1) * 0.1, C.fabric, C.fabricTop, 20, i === 0 ? EDGE_FURN : EDGE_FAINT));
+  for (let i = 0; i < 8; i++) {
+    const a = (i / 8) * Math.PI * 2;
+    b.seg(Math.cos(a) * r, y0, Math.sin(a) * r, 0, h - 0.02, 0, EDGE_FAINT);
+  }
+}
+
+/** A barbecue on a cart: legs, a shelf, the grill body with its lid at the back, the grate and the glow of the embers. */
+function barbecue(b: Builder, w: number, d: number, h: number): void {
+  const body = 0.68;
+  legs(b, w, d, body - 0.02, 0.04, 0.03, C.metal);
+  b.box(-w / 2 + 0.05, w / 2 - 0.05, 0.2, 0.23, -d / 2 + 0.05, d / 2 - 0.05, C.wood, C.woodTop, EDGE_FAINT);
+  b.box(-w / 2, w / 2, body - 0.02, body + 0.2, -d / 2, d / 2, C.dark, C.dark, EDGE_FURN);
+  b.box(-w / 2, w / 2, body + 0.2, h - 0.05, -d / 2, -d / 2 + d * 0.5, C.metal, C.metal, EDGE_FURN);
+  b.box(-0.02, 0.02, h - 0.05, h, -d / 2 + 0.02, -d / 2 + 0.06, C.metal);
+  const y = body + 0.2;
+  for (let i = 0; i <= 8; i++) {
+    const x = -w / 2 + 0.06 + ((w - 0.12) / 8) * i;
+    b.seg(x, y + 0.004, -d / 2 + d * 0.5, x, y + 0.004, d / 2 - 0.04, EDGE_FAINT);
+  }
+  b.seg(-w / 2 + 0.06, y - 0.05, d / 2 - 0.01, w / 2 - 0.06, y - 0.05, d / 2 - 0.01, EDGE_GLOW);
+}
+
+/** A garden shed: boards on a base, a gable roof with an overhang, a door and a window on the front (+z). */
+function gardenShed(b: Builder, w: number, d: number, h: number): void {
+  const eave = h - 0.38;
+  b.box(-w / 2, w / 2, 0, 0.06, -d / 2, d / 2, C.wood, C.woodTop, EDGE_FAINT);
+  b.box(-w / 2 + 0.02, w / 2 - 0.02, 0.06, eave, -d / 2 + 0.02, d / 2 - 0.02, C.wood, C.woodTop, EDGE_FURN);
+  b.loft([-w / 2 - 0.12, w / 2 + 0.12, -d / 2 - 0.1, d / 2 + 0.1], [0, 0, -d / 2 - 0.1, d / 2 + 0.1], eave, h, C.body, C.bodyTop, EDGE_FURN);
+  const z = d / 2 - 0.016;
+  // boards, the door with its handle and a window with a cross
+  for (let x = -w / 2 + 0.4; x < w / 2 - 0.1; x += 0.4) b.seg(x, 0.1, z, x, eave - 0.04, z, EDGE_FAINT);
+  const dx = -w / 2 + 0.3;
+  const dw = Math.min(0.9, w * 0.38);
+  b.box(dx, dx + dw, 0.06, 1.95, z, z + 0.012, C.dark, C.dark, EDGE_GLOW);
+  b.seg(dx + dw - 0.1, 0.95, z + 0.02, dx + dw - 0.1, 1.15, z + 0.02, EDGE_GLOW);
+  const wx = w / 2 - 0.3 - Math.min(0.7, w * 0.3);
+  const ww = Math.min(0.7, w * 0.3);
+  b.box(wx, wx + ww, 1.0, 1.65, z, z + 0.012, C.dark, C.dark, EDGE_GLOW);
+  b.seg(wx + ww / 2, 1.0, z + 0.02, wx + ww / 2, 1.65, z + 0.02, EDGE_FAINT);
+  b.seg(wx, 1.325, z + 0.02, wx + ww, 1.325, z + 0.02, EDGE_FAINT);
+}
+
+/** A hammock on a stand: two end posts with feet, a bar between them and the cloth hanging in a curve (head at -x). */
+function hammock(b: Builder, w: number, d: number, h: number): void {
+  const px = w / 2 - 0.08;
+  for (const sx of [-1, 1]) {
+    b.box(sx * px - 0.04, sx * px + 0.04, 0, h, -0.04, 0.04, C.wood, C.woodTop, EDGE_FURN);
+    b.box(sx * px - 0.05, sx * px + 0.05, 0, 0.05, -d * 0.4, d * 0.4, C.wood, C.woodTop, EDGE_FAINT);
+  }
+  b.box(-px, px, h - 0.05, h - 0.02, -0.02, 0.02, C.metal);
+  const n = 14;
+  const sag = Math.min(0.55, h * 0.45);
+  const x0 = -px + 0.12;
+  const x1 = px - 0.12;
+  for (let i = 0; i < n; i++) {
+    const t = (i + 0.5) / n;
+    const y = h * 0.88 - sag * Math.sin(Math.PI * t);
+    const half = d * 0.34 * (0.4 + 0.6 * Math.sin(Math.PI * t));
+    const xa = x0 + ((x1 - x0) / n) * i;
+    const xb = x0 + ((x1 - x0) / n) * (i + 1);
+    b.box(xa, xb, y - 0.05, y, -half, half, C.cushion, C.fabricTop, EDGE_FURN);
+  }
+}
+
+/** A hanging egg chair: a chain from the hook, an egg-shaped basket of cloth, its opening facing the front (+z). */
+function eggChair(b: Builder, w: number, d: number, h: number): void {
+  const r = Math.min(w, d) / 2;
+  const y0 = Math.min(0.4, h * 0.2);
+  const rings = [0.5, 0.78, 0.94, 1, 0.96, 0.84, 0.64, 0.38];
+  const step = Math.min(0.14, (h - y0 - 0.65) / rings.length);
+  rings.forEach((k, i) => b.cyl(0, 0, r * k, y0 + i * step, y0 + (i + 1) * step, C.fabric, C.fabricTop, 18, EDGE_FAINT));
+  const top = y0 + rings.length * step;
+  b.cyl(0, 0, 0.02, top, h, C.metal, C.metal, 6);
+  b.seg(0, top, 0, 0, h, 0, EDGE_FURN);
+  for (const dx of [-0.12, 0.12]) b.seg(dx * 0.5, top - 0.1, 0, 0, top, 0, EDGE_FAINT);
+  // the cushion and the opening drawn on the front
+  b.cyl(0, 0.02, r * 0.62, y0 + step * 1.1, y0 + step * 1.1 + 0.07, C.cushion, C.fabricTop, 14, EDGE_FURN);
+  const cy = y0 + step * 4;
+  const n = 20;
+  for (let i = 0; i < n; i++) {
+    const a0 = (i / n) * Math.PI * 2;
+    const a1 = ((i + 1) / n) * Math.PI * 2;
+    b.seg(Math.cos(a0) * r * 0.6, cy + Math.sin(a0) * step * 3.1, r * 0.8, Math.cos(a1) * r * 0.6, cy + Math.sin(a1) * step * 3.1, r * 0.8, EDGE_GLOW);
+  }
+}
+
+/** A raised vegetable bed: board walls, the soil and a few rows of plants. */
+function planter(b: Builder, w: number, d: number, h: number): void {
+  const t = 0.04;
+  b.box(-w / 2, w / 2, 0, h, -d / 2, -d / 2 + t, C.wood, C.woodTop, EDGE_FURN);
+  b.box(-w / 2, w / 2, 0, h, d / 2 - t, d / 2, C.wood, C.woodTop, EDGE_FURN);
+  b.box(-w / 2, -w / 2 + t, 0, h, -d / 2 + t, d / 2 - t, C.wood, C.woodTop, EDGE_FURN);
+  b.box(w / 2 - t, w / 2, 0, h, -d / 2 + t, d / 2 - t, C.wood, C.woodTop, EDGE_FURN);
+  b.box(-w / 2 + t, w / 2 - t, 0.05, h - 0.07, -d / 2 + t, d / 2 - t, C.dark, C.plant, EDGE_FAINT);
+  const cols = Math.max(2, Math.round(w / 0.3));
+  for (let i = 0; i < cols; i++) {
+    for (const [k, z] of [[0, -d * 0.2], [1, d * 0.2]] as const) {
+      const x = -w / 2 + (w / cols) * (i + 0.5);
+      b.cyl(x, z, 0.06 + ((i + k) % 3) * 0.015, h - 0.07, h + 0.04 + ((i + k) % 3) * 0.06, C.plant, C.plantTop, 6, EDGE_FAINT);
+    }
+  }
+}
+
+/** A slatted privacy screen (a claustra): end posts, rails and vertical slats with gaps. */
+function privacyScreen(b: Builder, w: number, d: number, h: number): void {
+  for (const sx of [-1, 1]) b.box(sx * (w / 2 - 0.04) - 0.04, sx * (w / 2 - 0.04) + 0.04, 0, h, -d / 2, d / 2, C.wood, C.woodTop, EDGE_FURN);
+  b.box(-w / 2 + 0.08, w / 2 - 0.08, h - 0.07, h, -d / 2, d / 2, C.wood, C.woodTop, EDGE_FURN);
+  b.box(-w / 2 + 0.08, w / 2 - 0.08, 0.08, 0.14, -d / 2, d / 2, C.wood, C.woodTop, EDGE_FAINT);
+  const n = Math.max(3, Math.round((w - 0.2) / 0.11));
+  const pitch = (w - 0.2) / n;
+  for (let i = 0; i < n; i++) {
+    const x = -w / 2 + 0.1 + pitch * (i + 0.5);
+    b.box(x - 0.025, x + 0.025, 0.14, h - 0.07, -d / 2 + 0.01, d / 2 - 0.01, C.wood, C.woodTop, EDGE_FAINT);
+  }
+}
+
+/** A cooker hood on the wall (back at -z): a sloping canopy over the hob and a chimney up to the ceiling. */
+function rangeHood(b: Builder, w: number, d: number, h: number): void {
+  const y0 = 1.5;
+  const cap = Math.min(0.24, h * 0.3);
+  b.loft([-w / 2, w / 2, -d / 2, d / 2], [-w * 0.2, w * 0.2, -d / 2, -d / 2 + d * 0.4], y0, y0 + cap, C.metal, C.metal, EDGE_FURN);
+  b.box(-w * 0.2, w * 0.2, y0 + cap, y0 + h, -d / 2, -d / 2 + d * 0.4, C.metal, C.metal, EDGE_FURN);
+  // the light strip under the front edge
+  b.seg(-w / 2 + 0.06, y0 + 0.004, d / 2 - 0.03, w / 2 - 0.06, y0 + 0.004, d / 2 - 0.03, EDGE_GLOW);
+}
+
+/** A microwave: a body with a dark glass door on the left, the controls on the right and a handle (front at +z). */
+function microwave(b: Builder, w: number, d: number, h: number): void {
+  b.box(-w / 2, w / 2, 0.01, h, -d / 2, d / 2 - 0.02, C.white, C.whiteTop, EDGE_FURN);
+  b.box(-w / 2, w / 2, 0, 0.01, -d / 2 + 0.03, d / 2 - 0.05, C.dark);
+  const z = d / 2 - 0.02;
+  b.box(-w / 2 + 0.03, w / 2 - 0.13, 0.04, h - 0.03, z, z + 0.012, C.dark, C.dark, EDGE_GLOW);
+  b.seg(w / 2 - 0.115, 0.06, z + 0.02, w / 2 - 0.115, h - 0.05, z + 0.02, EDGE_FAINT);
+  b.box(w / 2 - 0.095, w / 2 - 0.035, h - 0.1, h - 0.06, z, z + 0.012, C.dark, C.dark, EDGE_GLOW);
+  b.seg(w / 2 - 0.065, 0.07, z + 0.014, w / 2 - 0.065, 0.14, z + 0.014, EDGE_GLOW);
+}
+
+/** A coffee machine: a column at the back with the head over a cup tray, a cup under the spout and a glowing display. */
+function coffeeMachine(b: Builder, w: number, d: number, h: number): void {
+  b.box(-w / 2, w / 2, 0, 0.03, -d / 2, d / 2, C.dark, C.dark, EDGE_FAINT);
+  b.box(-w / 2, w / 2, 0.03, h, -d / 2, -d / 2 + 0.12, C.metal, C.metal, EDGE_FURN);
+  b.box(-w / 2, w / 2, h - 0.15, h, -d / 2, d / 2 - 0.04, C.metal, C.metal, EDGE_FURN);
+  b.box(-0.02, 0.02, h - 0.19, h - 0.15, d * 0.12, d * 0.12 + 0.04, C.dark);
+  b.cyl(0, d * 0.14, 0.035, 0.03, 0.09, C.white, C.whiteTop, 8);
+  b.seg(-w / 2 + 0.04, h - 0.075, d / 2 - 0.042, w / 2 - 0.04, h - 0.075, d / 2 - 0.042, EDGE_GLOW);
+}
+
+/** A towel radiator on the wall (back at -z): two side tubes and many rungs. */
+function towelRadiator(b: Builder, w: number, d: number, h: number): void {
+  const y0 = 0.25;
+  b.box(-w / 2, -w / 2 + 0.035, y0, y0 + h, -d / 2 + 0.01, d / 2, C.white, C.whiteTop, EDGE_FURN);
+  b.box(w / 2 - 0.035, w / 2, y0, y0 + h, -d / 2 + 0.01, d / 2, C.white, C.whiteTop, EDGE_FURN);
+  const n = Math.max(4, Math.round(h / 0.1));
+  for (let i = 0; i < n; i++) {
+    const y = y0 + 0.05 + ((h - 0.1) / (n - 1)) * i;
+    b.box(-w / 2 + 0.035, w / 2 - 0.035, y - 0.012, y + 0.012, -d / 2 + 0.03, -d / 2 + 0.05, C.white, C.whiteTop, EDGE_FAINT);
+  }
+}
+
+/** A wall mirror (back at -z): a thin frame, the glass a little proud of it with a glow along its edge and two glints. */
+function mirror(b: Builder, w: number, d: number, h: number): void {
+  const y0 = 0.9;
+  b.box(-w / 2, w / 2, y0, y0 + h, -d / 2, d / 2, C.metal, C.metal, EDGE_FURN);
+  b.box(-w / 2 + 0.035, w / 2 - 0.035, y0 + 0.035, y0 + h - 0.035, d / 2 - 0.004, d / 2 + 0.004, C.dark, C.dark, EDGE_GLOW);
+  const z = d / 2 + 0.01;
+  b.seg(-w * 0.28, y0 + h * 0.62, z, -w * 0.1, y0 + h * 0.86, z, EDGE_FAINT);
+  b.seg(-w * 0.1, y0 + h * 0.46, z, w * 0.12, y0 + h * 0.86, z, EDGE_FAINT);
+}
+
 function coffeeTable(b: Builder, w: number, d: number, h: number): void {
   legs(b, w, d, h - 0.03, 0.04, 0.03, C.wood);
   b.box(-w / 2, w / 2, h - 0.03, h, -d / 2, d / 2, C.wood, C.woodTop, EDGE_FURN);
@@ -1590,7 +1841,7 @@ function builtInScreen(f: Furniture, w: number, d: number, h: number, floor?: Fl
 
 /** Round things cast a round shadow: a round table, a plant, a pack item whose largest part is an upright cylinder (#719). */
 export function roundFootprint(f: Pick<Furniture, "type">): boolean {
-  if (f.type === "table_round" || f.type === "plant") return true;
+  if (f.type === "table_round" || f.type === "plant" || f.type === "coffee_table_round" || f.type === "parasol") return true;
   const item = packItem(f.type);
   if (!item?.parts.length) return false;
   const big = item.parts.reduce((m, p) => (p.w * p.d > m.w * m.d ? p : m), item.parts[0]);
@@ -1890,6 +2141,57 @@ function buildFurniture(buf: GeoBuffer, lines: LineBuffer, shadow: GeoBuffer, f:
     case "coffee_table":
       coffeeTable(b, w, d, h);
       break;
+    case "coffee_table_round":
+      roundCoffeeTable(b, w, d, h);
+      break;
+    case "bar_l":
+      barL(b, w, d, h);
+      break;
+    case "garden_chair":
+      gardenChair(b, w, d, h);
+      break;
+    case "garden_sofa":
+      gardenSofa(b, w, d, h);
+      break;
+    case "lounger":
+      lounger(b, w, d, h);
+      break;
+    case "parasol":
+      parasol(b, w, d, h);
+      break;
+    case "bbq":
+      barbecue(b, w, d, h);
+      break;
+    case "garden_shed":
+      gardenShed(b, w, d, h);
+      break;
+    case "hammock":
+      hammock(b, w, d, h);
+      break;
+    case "egg_chair":
+      eggChair(b, w, d, h);
+      break;
+    case "planter":
+      planter(b, w, d, h);
+      break;
+    case "privacy_screen":
+      privacyScreen(b, w, d, h);
+      break;
+    case "range_hood":
+      rangeHood(b, w, d, h);
+      return; // hangs over the hob, no shadow on the floor
+    case "wall_mirror":
+      mirror(b, w, d, h);
+      return;
+    case "towel_radiator":
+      towelRadiator(b, w, d, h);
+      return;
+    case "microwave":
+      microwave(b, w, d, h);
+      return; // stands on a worktop: the contact shadow is the worktop's
+    case "coffee_machine":
+      coffeeMachine(b, w, d, h);
+      return;
     case "tv_wall":
       tvWall(b, w, d, h);
       return;

@@ -12,29 +12,29 @@ import type { HomeAssistant } from "./types.ts";
  * `force` is true; `force === false` switches them off. `powerAlone`: the power tile is reason enough (the panel; the card
  * waits for Tempo, a forecast or `info_cards: true`, so existing cards stay as they are).
  */
-export function renderInfoTiles(
-  hass: HomeAssistant | undefined,
-  b: Building | null | undefined,
-  force: boolean | undefined,
-  powerAlone: boolean,
-  /** Folded: only the button is left. `toggle` flips it (the host keeps the state, see readInfoHidden). */
-  hidden: boolean,
-  toggle: () => void,
-) {
-  if (!hass || !b || force === false) return nothing;
+export function infoWanted(hass: HomeAssistant | undefined, b: Building | null | undefined, force: boolean | undefined, powerAlone: boolean): boolean {
+  if (!hass || !b || force === false) return false;
   const tiles = infoTiles(hass, b);
-  if (!tiles.tempo && !tiles.forecast && !(powerAlone && tiles.power) && force !== true) return nothing;
+  return !!tiles.tempo || !!tiles.forecast || (powerAlone && !!tiles.power) || force === true;
+}
+
+/** The small button that folds and unfolds the tiles: it sits in a row of the host that exists anyway (the host keeps the state, see readInfoHidden). */
+export function renderInfoToggle(hass: HomeAssistant | undefined, hidden: boolean, toggle: () => void, extra = "") {
+  const t = (k: I18nKey) => translate(hass, k);
+  return html`<button class="fp3d-info-toggle ${extra}" aria-expanded=${!hidden} title=${t(hidden ? "info_show" : "info_hide")} @click=${toggle}>
+    ${ico(ICON.info)}${t("info_short")}<span aria-hidden="true">${hidden ? "▾" : "▴"}</span>
+  </button>`;
+}
+
+export function renderInfoTiles(hass: HomeAssistant | undefined, b: Building | null | undefined, force: boolean | undefined, powerAlone: boolean, hidden: boolean) {
+  if (hidden || !hass || !b || !infoWanted(hass, b, force, powerAlone)) return nothing;
+  const tiles = infoTiles(hass, b);
   const t = (k: I18nKey) => translate(hass, k);
   const power = (w: number) => (Math.abs(w) >= 1000 ? `${formatNumber(hass, w / 1000, 1)} kW` : `${Math.round(w)} W`);
   const day = (label: string, color: TempoColor | null) => html`<span class="fp3d-info-day fp3d-info-${color ?? "none"}"><i></i>${label}<b>${color ? t(`info_${color}` as I18nKey) : "–"}</b></span>`;
   const stat = (icon: string, label: string, value: string, tone = "") => html`<span class="fp3d-info-stat ${tone}">${ico(icon)}<span><small>${label}</small><b>${value}</b></span></span>`;
   const p = tiles.power;
-  const button = html`<button class="fp3d-info-toggle" aria-expanded=${!hidden} title=${t(hidden ? "info_show" : "info_hide")} @click=${toggle}>
-    ${ico(ICON.info)}${t("info_short")}<span aria-hidden="true">${hidden ? "▾" : "▴"}</span>
-  </button>`;
-  if (hidden) return html`<div class="fp3d-info-bar">${button}</div>`;
-  return html`<div class="fp3d-info-bar">${button}</div>
-    <div class="fp3d-info" role="group" aria-label=${t("info_label")}>
+  return html`<div class="fp3d-info" role="group" aria-label=${t("info_label")}>
     ${tiles.tempo ? html`<div class="fp3d-info-tile"><span class="fp3d-info-name fp3d-info-tempo">${ico(ICON.calendar)}${t("info_tempo")}</span>${day(t("info_today"), tiles.tempo.today)}${day(t("info_tomorrow"), tiles.tempo.tomorrow)}</div>` : nothing}
     ${p
       ? html`<div class="fp3d-info-tile">
@@ -89,13 +89,11 @@ const ico = (path: string) =>
   html`<svg class="fp3d-info-ico" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d=${path} /></svg>`;
 
 export const infoStyles = css`
-  .fp3d-info-bar {
-    padding: 6px 12px 0;
-  }
   .fp3d-info-toggle {
     display: inline-flex;
     align-items: center;
     gap: 6px;
+    flex: none;
     padding: 4px 10px;
     border: 0;
     border-radius: 999px;
@@ -104,6 +102,16 @@ export const infoStyles = css`
     font: inherit;
     font-size: 12px;
     cursor: pointer;
+  }
+  /* on the card the button floats over the 3D view, top left */
+  .fp3d-info-float {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    z-index: 3;
+    background: rgba(9, 13, 22, 0.78);
+    color: #e8edf8;
+    backdrop-filter: blur(4px);
   }
   .fp3d-info-toggle span {
     font-size: 10px;

@@ -1,4 +1,4 @@
-// Top-view symbols of furniture for the 2D editor, in local metres (x across, z depth, front at +z).
+﻿// Top-view symbols of furniture for the 2D editor, in local metres (x across, z depth, front at +z).
 // The editor places them with translate/rotate/scale; strokes keep their width on screen.
 
 import { nothing, svg, type SVGTemplateResult } from "lit";
@@ -95,6 +95,60 @@ export function furnitureSymbol(type: string, w: number, d: number): Part[] | ty
     case "bar_stool":
     case "table_round":
       return [circle(0, 0, Math.min(w, d) * 0.42)];
+    case "coffee_table_round":
+      return [circle(0, 0, Math.min(w, d) * 0.42), circle(0, 0, Math.min(w, d) * 0.3)];
+    case "bar_l": {
+      // the L of the counter with its inner edge, the stools pull in there
+      const t = Math.min(0.6, w * 0.4, d * 0.4);
+      return [rect(-w / 2, -d / 2, w / 2, -d / 2 + t, "fp3d-sym-fill"), rect(-w / 2, -d / 2 + t, -w / 2 + t, d / 2, "fp3d-sym-fill"), line(-w / 2 + t, -d / 2 + t, w / 2, -d / 2 + t, "fp3d-sym-strong"), line(-w / 2 + t, -d / 2 + t, -w / 2 + t, d / 2, "fp3d-sym-strong")];
+    }
+    case "garden_chair":
+      return [rect(-w / 2, -d / 2, w / 2, -d / 2 + 0.09, "fp3d-sym-fill"), rect(-w / 2 + 0.04, -d / 2 + 0.14, w / 2 - 0.04, d / 2 - 0.04)];
+    case "garden_sofa":
+      return seating(w, d, Math.max(2, Math.round((w - 0.32) / 0.65)), true);
+    case "lounger":
+      return [rect(-w / 2 + 0.03, -d / 2, w / 2 - 0.03, d / 2), line(-w / 2 + 0.03, -d / 2 + Math.min(0.8, d * 0.4), w / 2 - 0.03, -d / 2 + Math.min(0.8, d * 0.4), "fp3d-sym-strong")];
+    case "parasol": {
+      // the canopy from above: its rim, the ribs and the pole
+      const r = Math.min(w, d) / 2;
+      const out: Part[] = [circle(0, 0, r), circle(0, 0, r * 0.5), circle(0, 0, 0.04, "fp3d-sym-fill")];
+      for (let i = 0; i < 8; i++) out.push(line(Math.cos((i / 8) * Math.PI * 2) * r * 0.5, Math.sin((i / 8) * Math.PI * 2) * r * 0.5, Math.cos((i / 8) * Math.PI * 2) * r, Math.sin((i / 8) * Math.PI * 2) * r));
+      return out;
+    }
+    case "garden_shed":
+      // the ridge, and the door on the front
+      return [line(0, -d / 2, 0, d / 2, "fp3d-sym-strong"), rect(-w / 2 + 0.3, d / 2 - 0.05, -w / 2 + 0.3 + Math.min(0.9, w * 0.38), d / 2)];
+    case "hammock":
+      return [rect(-w / 2 + 0.12, -d * 0.34, w / 2 - 0.12, d * 0.34), line(-w / 2 + 0.08, -d * 0.4, -w / 2 + 0.08, d * 0.4, "fp3d-sym-strong"), line(w / 2 - 0.08, -d * 0.4, w / 2 - 0.08, d * 0.4, "fp3d-sym-strong")];
+    case "egg_chair":
+      return [ellipse(0, 0, w * 0.46, d * 0.46), circle(0, 0, Math.min(w, d) * 0.12, "fp3d-sym-fill")];
+    case "planter": {
+      const out: Part[] = [rect(-w / 2 + 0.04, -d / 2 + 0.04, w / 2 - 0.04, d / 2 - 0.04)];
+      const cols = Math.max(2, Math.round(w / 0.3));
+      for (let i = 0; i < cols; i++) out.push(circle(-w / 2 + (w / cols) * (i + 0.5), -d * 0.2, 0.05), circle(-w / 2 + (w / cols) * (i + 0.5), d * 0.2, 0.05));
+      return out;
+    }
+    case "privacy_screen": {
+      const out: Part[] = [rect(-w / 2, -d / 2, w / 2, d / 2, "fp3d-sym-fill")];
+      for (let i = 1; i < Math.round(w / 0.11); i++) out.push(line(-w / 2 + 0.11 * i, -d / 2, -w / 2 + 0.11 * i, d / 2));
+      return out;
+    }
+    case "range_hood":
+      return [rect(-w / 2, -d / 2, w / 2, d / 2), rect(-w * 0.2, -d / 2, w * 0.2, -d / 2 + d * 0.4, "fp3d-sym-fill")];
+    case "microwave":
+      return [rect(-w / 2 + 0.03, -d / 2 + 0.03, w / 2 - 0.03, d / 2 - 0.03), line(w / 2 - 0.13, -d / 2 + 0.03, w / 2 - 0.13, d / 2 - 0.03)];
+    case "coffee_machine":
+      return [rect(-w / 2, -d / 2, w / 2, d / 2), circle(0, d * 0.14, 0.04, "fp3d-sym-fill")];
+    case "towel_radiator": {
+      const out: Part[] = [];
+      const n = Math.max(3, Math.round(w / 0.12));
+      for (let i = 1; i < n; i++) out.push(line(-w / 2 + (w / n) * i, -d / 2, -w / 2 + (w / n) * i, d / 2));
+      return out;
+    }
+    case "wall_mirror":
+      return [line(-w / 2, 0, w / 2, 0, "fp3d-sym-strong"), line(-w * 0.3, -d / 2, w * 0.3, -d / 2)];
+    case "bbq":
+      return [rect(-w / 2 + 0.03, -d / 2 + 0.03, w / 2 - 0.03, d / 2 - 0.03), circle(-w * 0.2, 0.02, Math.min(w, d) * 0.2), circle(w * 0.2, 0.02, Math.min(w, d) * 0.2), line(-w / 2, -d / 2 + d * 0.5, w / 2, -d / 2 + d * 0.5, "fp3d-sym-strong")];
     case "stool":
       return [rect(-w / 2 + 0.04, -d / 2 + 0.04, w / 2 - 0.04, d / 2 - 0.04)];
     case "table":

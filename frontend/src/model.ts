@@ -1,4 +1,4 @@
-// Data model shared by editor, 3D view and backend (see custom_components/neonplan3d/schema.py).
+﻿// Data model shared by editor, 3D view and backend (see custom_components/neonplan3d/schema.py).
 // Units are metres; x grows to the right, z grows downwards (as in the 2D editor).
 
 import { packItem } from "./packs.ts";
@@ -808,8 +808,14 @@ export type WeatherEffect = (typeof WEATHER_EFFECTS)[number];
 /** The effects shown when the plan does not say: everything but fog (fog greys the whole scene). */
 export const DEFAULT_WEATHER_EFFECTS: WeatherEffect[] = ["rain", "snow", "clouds", "lightning", "sky"];
 
-export const OUTDOOR_TYPES = ["lawn", "terrace", "path", "driveway", "pool", "bed", "wild", "hedge", "fence", "pergola", "balcony"] as const;
+export const OUTDOOR_TYPES = ["lawn", "terrace", "path", "driveway", "pool", "bed", "wild", "hedge", "fence", "pergola", "gazebo", "balcony"] as const;
 export type OutdoorType = (typeof OUTDOOR_TYPES)[number];
+
+/** What a gazebo's roof is made of: a canvas, transparent plates, wood, or nothing (the frame only: rain falls through). */
+export const GAZEBO_COVERS = ["canvas", "plexi", "wood", "none"] as const;
+export type GazeboCover = (typeof GAZEBO_COVERS)[number];
+/** How far a gazebo's roof rises above its eaves when nothing says (m). */
+export const GAZEBO_RISE = 0.9;
 
 /** Top of each kind of outdoor area above ground level (pool: its water, below). */
 export const OUTDOOR_TOP: Record<OutdoorType, number> = {
@@ -823,13 +829,15 @@ export const OUTDOOR_TOP: Record<OutdoorType, number> = {
   hedge: 1.2,
   fence: 1.0,
   pergola: 2.2,
+  // a gazebo's posts: its eaves
+  gazebo: 2.3,
   // a balcony's floor lies at the floor's level, a thin slab in front of the house
   balcony: 0.02,
 };
 
 /** Types that stand on the ground as structures (no surface to stand on, no light pool). */
 export function outdoorStanding(type: OutdoorType): boolean {
-  return type === "hedge" || type === "fence" || type === "pergola";
+  return type === "hedge" || type === "fence" || type === "pergola" || type === "gazebo";
 }
 
 /**
@@ -963,6 +971,9 @@ export interface OutdoorArea {
   bracing?: boolean;
   /** Pergola: the roof is covered with transparent plates (Plexiglas, polycarbonate). */
   glazed?: boolean;
+  /** Gazebo: what its peaked roof is made of (null = canvas), and how far it rises above the eaves in m (null = GAZEBO_RISE). */
+  cover?: GazeboCover | null;
+  rise?: number | null;
   /** This area is cut out of every area beneath it that contains it (a wild patch or pond inside a lawn). */
   cut?: boolean;
   /** Pool: round or oval (chosen before drawing); its outline is made from its box and resized as a whole. */
@@ -1367,6 +1378,23 @@ export const FURNITURE_TYPES = [
   "stairwell",
   "awning",
   "gate",
+  "bar_l",
+  "garden_chair",
+  "garden_sofa",
+  "lounger",
+  "coffee_table_round",
+  "parasol",
+  "bbq",
+  "garden_shed",
+  "hammock",
+  "egg_chair",
+  "planter",
+  "privacy_screen",
+  "range_hood",
+  "microwave",
+  "coffee_machine",
+  "towel_radiator",
+  "wall_mirror",
   "fireplace",
   "printer_3d",
   "waste_bin",
@@ -1381,14 +1409,14 @@ export const FURNITURE_TYPES = [
 /** Furniture library sections (the editor lists them in this order). */
 export const FURNITURE_GROUPS: Record<string, FurnitureType[]> = {
   lights: ["lamp_ceiling", "lamp_downlight", "lamp_spot", "lamp_panel", "lamp_pendant", "lamp_fan", "lamp_floor", "lamp_uplight", "lamp_table", "lamp_wall", "led_strip", "lamp_bollard", "lamp_garden"],
-  living: ["sofa", "sofa_l", "sofa_u", "armchair", "stool", "coffee_table", "tv_board", "tv_wall", "sideboard", "shelf", "fireplace", "plant", "rug"],
+  living: ["sofa", "sofa_l", "sofa_u", "armchair", "egg_chair", "stool", "coffee_table", "tv_board", "tv_wall", "sideboard", "shelf", "fireplace", "wall_mirror", "plant", "rug"],
   dining: ["table", "table_round", "chair", "bench", "corner_bench", "bar_stool"],
-  kitchen: ["kitchen", "kitchen_wall", "kitchen_tall", "island", "worktop", "sink", "stove", "oven", "dishwasher", "fridge"],
+  kitchen: ["kitchen", "kitchen_wall", "kitchen_tall", "island", "worktop", "sink", "stove", "oven", "range_hood", "microwave", "coffee_machine", "dishwasher", "fridge"],
   sleeping: ["bed", "bunk_bed", "nightstand", "wardrobe", "dresser"],
-  bath: ["bathtub", "shower", "wc", "washbasin", "washer", "dryer"],
+  bath: ["bathtub", "shower", "wc", "washbasin", "towel_radiator", "wall_mirror", "washer", "dryer"],
   work: ["desk", "worktop", "office_chair", "tall_cabinet", "coat_rack", "radiator", "ac_unit", "stairs", "stairs_u", "robot_vacuum", "printer_3d"],
   vehicles: ["parking"],
-  outdoor: ["awning", "gate"],
+  outdoor: ["awning", "gate", "bar_l", "bar_stool", "garden_chair", "garden_sofa", "lounger", "hammock", "egg_chair", "bench", "coffee_table_round", "table_round", "parasol", "bbq", "garden_shed", "planter", "privacy_screen"],
   household: ["waste_bin", "mailbox"],
   switches: ["wall_switch", "wall_socket", "wifi_ap", "water_heater"],
 };
@@ -1474,6 +1502,8 @@ const SURFACES = new Set<string>([
   "table",
   "table_round",
   "coffee_table",
+  "coffee_table_round",
+  "bar_l",
   "desk",
   "nightstand",
   "sideboard",
@@ -1540,6 +1570,13 @@ export function builtinBase(f: Pick<Furniture, "type" | "h"> & { variant?: strin
       return Math.max(0, 1.3 - f.h / 2);
     case "radiator":
       return 0.12;
+    case "towel_radiator":
+      return 0.25;
+    case "range_hood":
+      // the hood's lower edge, over a hob
+      return 1.5;
+    case "wall_mirror":
+      return 0.9;
     case "ac_unit":
       // an air conditioner's indoor unit hangs high on the wall
       return 2.05;
@@ -1627,9 +1664,16 @@ export function techBase(f: { type: string; variant?: string | null; h: number }
   return null;
 }
 
+/** Small appliances that stand on whatever surface is under them (a worktop, a table), like a table lamp. */
+export const ON_SURFACE = new Set<string>(["microwave", "coffee_machine"]);
+
 export const ELECTRIC_FURNITURE = new Set<string>([
   ...LAMP_TYPES,
   "radiator",
+  "towel_radiator",
+  "range_hood",
+  "microwave",
+  "coffee_machine",
   "ac_unit",
   "awning",
   "gate",
@@ -1746,6 +1790,27 @@ export const FURNITURE_SIZE: Record<FurnitureType, [number, number, number]> = {
   awning: [3.0, 2.5, 0.22],
   // a driveway gate between two posts (width with the posts, thickness of the posts, height of the leaves)
   gate: [3.6, 0.2, 1.5],
+  // outdoor furniture: a right-angled bar (the long arm along x, the short one along z, both 0.6 m deep), garden seats, a low round table, a parasol, a barbecue
+  bar_l: [2.4, 2.0, 1.05],
+  garden_chair: [0.6, 0.62, 0.85],
+  garden_sofa: [1.9, 0.85, 0.8],
+  lounger: [0.7, 1.95, 0.4],
+  coffee_table_round: [0.7, 0.7, 0.4],
+  parasol: [2.4, 2.4, 2.4],
+  bbq: [0.9, 0.55, 1.0],
+  // a shed, a hammock on its stand, a hanging egg chair (h = from the floor up to the hook), a raised vegetable bed, a slatted privacy screen
+  garden_shed: [2.4, 2.0, 2.3],
+  hammock: [3.2, 1.0, 1.3],
+  egg_chair: [0.95, 0.85, 2.2],
+  planter: [1.2, 0.8, 0.5],
+  privacy_screen: [1.8, 0.06, 1.8],
+  // kitchen: a hood over the hob (h = the whole hood, it hangs from 1.5 m), a microwave and a coffee machine standing on the worktop
+  range_hood: [0.9, 0.5, 0.85],
+  microwave: [0.5, 0.38, 0.3],
+  coffee_machine: [0.3, 0.35, 0.4],
+  // bathroom: a towel radiator and a mirror on the wall
+  towel_radiator: [0.5, 0.08, 1.2],
+  wall_mirror: [0.7, 0.04, 1.0],
   // a built-in fireplace: the wall piece it sits in, as wide as it is thick and tall as the room
   fireplace: [1.8, 0.4, 2.5],
   // a closed-chamber printer (Bambu Lab P1S / X1C size)

@@ -6,7 +6,7 @@
 
 import { css, html, LitElement, nothing } from "lit";
 import { repeat } from "lit/directives/repeat.js";
-import { KINDS, cardsOf, filterEntries, sizeText, type LibraryCard, type LibraryEntry, type Room, ROOMS } from "../library-index.ts";
+import { KINDS, cardsOf, filterEntries, sizeText, type Kind, type LibraryCard, type LibraryEntry, type Room, ROOMS } from "../library-index.ts";
 import { tokens } from "../styles.ts";
 import { thumbFor } from "../thumbs.ts";
 
@@ -16,6 +16,27 @@ const THUMB_PX = 96;
 const STORE_OPEN = "neonplan3d.lib.open";
 const STORE_FAV = "neonplan3d.lib.fav";
 const STORE_RECENT = "neonplan3d.lib.recent";
+const STORE_TAB = "neonplan3d.lib.tab";
+
+/**
+ * The tabs: a handful of groups of kinds instead of two dozen sections. Every kind is in exactly one group; the
+ * outdoor group also takes everything made for the garden, whatever its kind (a garden chair is a seat as well).
+ */
+const GROUPS: { id: string; icon: string; kinds: readonly Kind[] }[] = [
+  { id: "seat", icon: "🛋", kinds: ["sofa", "seating", "table"] },
+  { id: "store", icon: "🗄", kinds: ["storage", "deco", "plant"] },
+  { id: "rest", icon: "🛏", kinds: ["bed", "bath", "kids"] },
+  { id: "cook", icon: "🍳", kinds: ["kitchen", "appliance"] },
+  { id: "light", icon: "💡", kinds: ["lamp"] },
+  { id: "tech", icon: "⚡", kinds: ["media", "office", "tech", "heating", "energy", "household"] },
+  { id: "outside", icon: "🌳", kinds: ["outdoor", "sport", "pets", "vehicle"] },
+  { id: "build", icon: "🏗", kinds: ["stairs", "architecture"] },
+];
+
+/** The entries of a group: its kinds, and for the outdoor group everything for the garden. */
+function groupEntries(hits: readonly LibraryEntry[], g: (typeof GROUPS)[number]): LibraryEntry[] {
+  return hits.filter((e) => g.kinds.includes(e.kind) || (g.id === "outside" && (e.outdoor || e.rooms.includes("garden"))));
+}
 
 type Translate = (key: string, vars?: Record<string, string | number>) => string;
 
@@ -49,7 +70,7 @@ export class FurnitureLibrary extends LitElement {
     _room: { state: true },
     _electric: { state: true },
     _light: { state: true },
-    _outdoor: { state: true },
+    _tab: { state: true },
     _open: { state: true },
     _fav: { state: true },
     _recent: { state: true },
@@ -73,7 +94,8 @@ export class FurnitureLibrary extends LitElement {
   private declare _room: Room | null;
   private declare _electric: boolean;
   private declare _light: boolean;
-  private declare _outdoor: boolean;
+  /** The group shown: "all" or one of GROUPS. */
+  private declare _tab: string;
   private declare _open: Set<string>;
   private declare _fav: string[];
   private declare _recent: string[];
@@ -101,7 +123,7 @@ export class FurnitureLibrary extends LitElement {
     this._room = null;
     this._electric = false;
     this._light = false;
-    this._outdoor = false;
+    this._tab = load<string>(STORE_TAB, "all");
     this._open = new Set(load<string[]>(STORE_OPEN, ["sofa", "lamp"]));
     this._fav = load<string[]>(STORE_FAV, []);
     this._recent = load<string[]>(STORE_RECENT, []);
@@ -234,7 +256,12 @@ export class FurnitureLibrary extends LitElement {
   }
 
   private get hits(): LibraryEntry[] {
-    return filterEntries(this.entries, { query: this._query, room: this._room, electric: this._electric, light: this._light, outdoor: this._outdoor });
+    return filterEntries(this.entries, { query: this._query, room: this._room, electric: this._electric, light: this._light, outdoor: false });
+  }
+
+  private setTab(tab: string): void {
+    this._tab = tab;
+    save(STORE_TAB, tab);
   }
 
   render() {
@@ -246,9 +273,14 @@ export class FurnitureLibrary extends LitElement {
     const single = (e: LibraryEntry): LibraryCard => ({ key: e.key, label: e.label, kind: e.kind, rooms: e.rooms, entries: [e] });
     const recent = this._recent.map((k) => byKey.get(k)).filter((e): e is LibraryEntry => !!e && hitKeys.has(e.key));
     const favs = this._fav.map((k) => byKey.get(k)).filter((e): e is LibraryEntry => !!e && hitKeys.has(e.key));
-    const sections = KINDS.map((kind) => ({ kind, cards: cardsOf(hits, kind) })).filter((s) => s.cards.length);
-    // with nothing open among the sections that have hits, the first one opens by itself
-    const firstOpen = sections.length && !sections.some((s) => this._open.has(s.kind)) ? sections[0].kind : null;
+    // the groups that have hits (with a search, every group is shown: the tab does not hide a find)
+    const groups = GROUPS.map((g) => ({ g, entries: groupEntries(hits, g) })).filter((x) => x.entries.length);
+    const tab = searching || this._tab === "all" || !groups.some((x) => x.g.id === this._tab) ? "all" : this._tab;
+    // a tab shows its kinds one after the other under small headings; "all" folds each group into a section
+    const kindsOf = (entries: LibraryEntry[]) => KINDS.filter((k) => entries.some((e) => e.kind === k));
+    const cardsOfGroup = (entries: LibraryEntry[]) => kindsOf(entries).flatMap((k) => cardsOf(entries, k));
+    const firstOpen = groups.length && !groups.some((x) => this._open.has(x.g.id)) ? groups[0].g.id : null;
+    const one = groups.find((x) => x.g.id === tab);
     return html`<input
         class="fp3d-search"
         type="search"
@@ -259,20 +291,38 @@ export class FurnitureLibrary extends LitElement {
           if (e.key === "Escape") this._query = "";
         }}
       />
-      <div class="fp3d-lib-rooms" role="group">
-        <button class="fp3d-chip ${this._room === null ? "on" : ""}" @click=${() => this.setRoom(null)}>${t("lib_room_all")}</button>
-        ${ROOMS.map((r) => html`<button class="fp3d-chip ${this._room === r ? "on" : ""}" @click=${() => this.setRoom(r)}>${t(`lib_room_${r}`)}</button>`)}
+      <div class="fp3d-lib-rooms" role="tablist" aria-label=${t("lib_tabs")}>
+        <button class="fp3d-chip ${tab === "all" ? "on" : ""}" role="tab" aria-selected=${tab === "all"} @click=${() => this.setTab("all")}>${t("lib_tab_all")}</button>
+        ${groups.map((x) => html`<button class="fp3d-chip ${tab === x.g.id ? "on" : ""}" role="tab" aria-selected=${tab === x.g.id} @click=${() => this.setTab(x.g.id)}>${x.g.icon} ${t(`lib_group_${x.g.id}`)}</button>`)}
       </div>
       <div class="fp3d-lib-chips">
+        <select class="fp3d-lib-room" aria-label=${t("lib_room_all")} @change=${(e: Event) => this.setRoom(((e.target as HTMLSelectElement).value || null) as Room | null)}>
+          <option value="" ?selected=${this._room === null}>${t("lib_room_all")}</option>
+          ${ROOMS.map((r) => html`<option value=${r} ?selected=${this._room === r}>${t(`lib_room_${r}`)}</option>`)}
+        </select>
         <button class="fp3d-chip fp3d-chip-f ${this._electric ? "on" : ""}" @click=${() => (this._electric = !this._electric)}>⚡ ${t("lib_chip_electric")}</button>
         <button class="fp3d-chip fp3d-chip-f ${this._light ? "on" : ""}" @click=${() => (this._light = !this._light)}>💡 ${t("lib_chip_light")}</button>
-        <button class="fp3d-chip fp3d-chip-f ${this._outdoor ? "on" : ""}" @click=${() => (this._outdoor = !this._outdoor)}>🌳 ${t("lib_chip_outdoor")}</button>
       </div>
       ${this.roomHint && this._room === this.roomHint && !this.roomTouched ? html`<p class="fp3d-lib-hint">${t("lib_hint_room")}</p>` : nothing}
       ${!hits.length ? html`<p class="fp3d-lib-hint">${t("furniture_search_none")}</p>` : nothing}
-      ${recent.length ? this.section("recent", `🕘 ${t("lib_recent")}`, recent.map(single), searching, true) : nothing}
-      ${favs.length ? this.section("fav", `★ ${t("lib_favorites")}`, favs.map(single), searching, true) : nothing}
-      ${sections.map((s) => this.section(s.kind, t(`lib_kind_${s.kind}`), s.cards, searching || s.kind === firstOpen, false))}`;
+      ${tab === "all" && recent.length ? this.section("recent", `🕘 ${t("lib_recent")}`, recent.map(single), searching, true) : nothing}
+      ${tab === "all" && favs.length ? this.section("fav", `★ ${t("lib_favorites")}`, favs.map(single), searching, true) : nothing}
+      ${one
+        ? kindsOf(one.entries).map((k) => html`<div class="fp3d-lib-sub">${t(`lib_kind_${k}`)}</div>${this.grid(`${one.g.id}:${k}`, cardsOf(one.entries, k))}`)
+        : groups.map((x) => this.section(x.g.id, `${x.g.icon} ${t(`lib_group_${x.g.id}`)}`, cardsOfGroup(x.entries), searching || x.g.id === firstOpen, false))}`;
+  }
+
+  /** A grid of cards with its "more" button. */
+  private grid(key: string, cards: LibraryCard[]) {
+    const limit = this._limits.get(key) ?? PAGE;
+    return html`<div class="fp3d-lib-grid">${repeat(cards.slice(0, limit), (c) => c.key, (c) => this.card(c))}</div>
+      ${cards.length > limit
+        ? html`<button class="fp3d-lib-more" @click=${() => {
+            const next = new Map(this._limits);
+            next.set(key, limit + PAGE * 2);
+            this._limits = next;
+          }}>${this.t("lib_more", { n: cards.length - limit })}</button>`
+        : nothing}`;
   }
 
   private section(key: string, title: string, cards: LibraryCard[], searching: boolean, special: boolean) {
@@ -390,6 +440,22 @@ export class FurnitureLibrary extends LitElement {
       .fp3d-lib-hint {
         margin: 2px 0 8px;
         font-size: 12px;
+        color: var(--fp3d-muted);
+      }
+      .fp3d-lib-room {
+        font: inherit;
+        font-size: 12px;
+        color: var(--fp3d-text);
+        background: rgba(255, 255, 255, 0.05);
+        border: 1px solid var(--fp3d-line);
+        border-radius: 999px;
+        padding: 3px 8px;
+        max-width: 100%;
+      }
+      .fp3d-lib-sub {
+        margin: 10px 0 4px;
+        font-size: 12px;
+        font-weight: 600;
         color: var(--fp3d-muted);
       }
       .fp3d-lib-head {

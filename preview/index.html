@@ -313,7 +313,8 @@
         hass.states["sensor.pv_leistung"] = { ...hass.states["sensor.pv_leistung"], state: params.get("pv") };
       }
       if (params.has("weather")) {
-        // ?weather=pouring|snowy|fog|lightning-rainy|cloudy… sets the demo weather
+        // ?weather=pouring|snowy|fog|lightning-rainy|cloudy… sets the demo weather (the loaded house has no weather entity of its own: one is made)
+        hass.states["weather.zuhause"] ??= { entity_id: "weather.zuhause", state: "sunny", attributes: { friendly_name: "Wetter" } };
         hass.states["weather.zuhause"].state = params.get("weather");
         hass.states["weather.zuhause"].attributes = { ...hass.states["weather.zuhause"].attributes, cloud_coverage: 85, wind_speed: 25, wind_speed_unit: "km/h" };
       }
@@ -421,6 +422,8 @@
           // ?card&plan: the plan view (from above, no roof); &angle=20 tilts it, &rot=90 turns it; &solartotal: one solar card on the roof
           ...(params.has("plan") ? { plan_view: true, plan_angle: Number(params.get("angle")) || 0, plan_rotation: Number(params.get("rot")) || 0, controls: true, height: 640 } : {}),
           ...(params.has("solartotal") ? { solar_total: true } : {}),
+          // &quality=high: the weather (rain, snow) only shows above the tablet level, which the preview's software renderer falls to
+          ...(params.get("quality") ? { quality: params.get("quality") } : {}),
           // &h=700: the card's height in px (to look at the roof from a high angle)
           ...(params.get("h") ? { height: Number(params.get("h")) } : {}),
           // &names=0: no room names (the values stay); &valtemp: only the temperature beside the rooms

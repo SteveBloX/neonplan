@@ -6,7 +6,7 @@
 
 import { Color } from "three";
 import type { Floor, OutdoorArea, OutdoorType, Vec2 } from "../model.ts";
-import { areaGround, bounds, groundDrop, isAxisRect, OUTDOOR_TOP, outdoorStanding, pointInPolygon, poolFloorY, poolRimY, poolSunken, poolWaterY, signedArea } from "../model.ts";
+import { areaGround, bounds, GAZEBO_RISE, groundDrop, isAxisRect, OUTDOOR_TOP, outdoorStanding, pointInPolygon, poolFloorY, poolRimY, poolSunken, poolWaterY, signedArea } from "../model.ts";
 import { ALWAYS, type GeoBuffer, type LineBuffer, pushPrism, shade, triangulate } from "./geo.ts";
 
 interface Look {
@@ -27,6 +27,7 @@ const LOOKS: Record<OutdoorType, Look> = {
   hedge: { color: 0x16402f, side: 0x103024, edge: 0x3de0a0, edgeAlpha: 0.35 },
   fence: { color: 0x1d2946, side: 0x1d2946, edge: 0x5b7cff, edgeAlpha: 0.45 },
   pergola: { color: 0x2a2238, side: 0x1f1a2c, edge: 0x5b7cff, edgeAlpha: 0.5 },
+  gazebo: { color: 0x2a2238, side: 0x1f1a2c, edge: 0x5b7cff, edgeAlpha: 0.55 },
   balcony: { color: 0x1d2238, side: 0x161a2c, edge: 0x5b7cff, edgeAlpha: 0.5 },
 };
 
@@ -282,6 +283,54 @@ export function pushOutdoor(buf: GeoBuffer, lines: LineBuffer, floor: Floor, wat
           }
         }
         outline((x, z) => groundAt(x, z) + h + 0.004);
+        break;
+      }
+      case "gazebo": {
+        // a peaked tent roof (a chapiteau) on corner posts: a pyramid up to the middle of the area, covered with canvas,
+        // transparent plates or wood – or left open with its rafters only. Any outline works; a square is the usual one.
+        const h = look.top;
+        const rise = a.rise ?? GAZEBO_RISE;
+        const cover = a.cover ?? "canvas";
+        const n = poly.length;
+        const cx = poly.reduce((s, p) => s + p[0], 0) / n;
+        const cz = poly.reduce((s, p) => s + p[1], 0) / n;
+        const apex: [number, number, number] = [cx, groundAt(cx, cz) + h + rise, cz];
+        for (const [x, z] of poly) {
+          const gy = groundAt(x, z);
+          pushPrism(buf, ccw([[x - 0.07, z - 0.07], [x + 0.07, z - 0.07], [x + 0.07, z + 0.07], [x - 0.07, z + 0.07]]), gy, gy + h, look.side, look.color);
+        }
+        const tone = cover === "wood" ? [new Color(0x6b4a30), new Color(0x5a3e28)] : [new Color(0xe9e4d2), new Color(0xd3ccb6)];
+        const hem = new Color(cover === "wood" ? 0x4a3322 : 0xbdb6a0);
+        for (let i = 0; i < n; i++) {
+          const p = poly[i];
+          const q = poly[(i + 1) % n];
+          const yp = groundAt(p[0], p[1]) + h;
+          const yq = groundAt(q[0], q[1]) + h;
+          pushBeam(buf, p, q, 0.1, yp - 0.12, yp, look.side, look.color, yq - yp);
+          if (cover !== "none") {
+            const col = cover === "plexi" ? new Color(0xa8e4ff) : tone[i % 2];
+            const into = cover === "plexi" && water ? water : buf;
+            const a1: [number, number, number] = [p[0], yp, p[1]];
+            const a2: [number, number, number] = [q[0], yq, q[1]];
+            into.tri(a1, a2, apex, col, col, col, undefined, ALWAYS);
+            into.tri(a1, apex, a2, col, col, col, undefined, ALWAYS);
+            // the canvas hangs down a little at the eaves (the valance)
+            if (cover === "canvas") {
+              const d = 0.22;
+              const b1: [number, number, number] = [p[0], yp - d, p[1]];
+              const b2: [number, number, number] = [q[0], yq - d, q[1]];
+              buf.tri(a1, a2, b2, hem, hem, hem, undefined, ALWAYS);
+              buf.tri(a1, b2, a2, hem, hem, hem, undefined, ALWAYS);
+              buf.tri(a1, b2, b1, hem, hem, hem, undefined, ALWAYS);
+              buf.tri(a1, b1, b2, hem, hem, hem, undefined, ALWAYS);
+            }
+          }
+          // the neon lines: the eave and the rib up to the peak
+          if (a.outline !== false || cover === "none") {
+            lines.seg([p[0], yp + 0.004, p[1]], [q[0], yq + 0.004, q[1]], edge, ALWAYS);
+            lines.seg([p[0], yp + 0.004, p[1]], apex, edge, ALWAYS);
+          }
+        }
         break;
       }
       case "balcony": {

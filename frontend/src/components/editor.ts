@@ -1,4 +1,4 @@
-// 2D editor: floors, rooms (rectangles and free shapes), snapping, undo, background template.
+﻿// 2D editor: floors, rooms (rectangles and free shapes), snapping, undo, background template.
 
 import { css, html, LitElement, nothing, svg, type PropertyValues, type TemplateResult } from "lit";
 import { linesField } from "./lines-field.ts";
@@ -85,6 +85,9 @@ import {
   LAMP_MODEL,
   isAxisRect,
   OUTDOOR_TYPES,
+  GAZEBO_COVERS,
+  GAZEBO_RISE,
+  type GazeboCover,
   BUTTON_ACTIONS,
   type ButtonAction,
   type CustomButton,
@@ -221,7 +224,7 @@ type SettingsTopic = "house" | "weather" | "director" | "voice" | "locate" | "fa
 /** Wall view side bar: what stands or hangs at a wall, by kind. */
 const WALL_CATS: Record<string, string[]> = {
   base: ["kitchen", "sink", "stove", "oven", "dishwasher", "sideboard", "dresser", "tv_board", "nightstand", "washbasin", "washer", "dryer", "worktop", "desk"],
-  hang: ["kitchen_wall", "tv_wall", "shelf", "lamp_wall", "radiator", "ac_unit", "led_strip"],
+  hang: ["kitchen_wall", "tv_wall", "shelf", "lamp_wall", "radiator", "towel_radiator", "range_hood", "wall_mirror", "ac_unit", "led_strip"],
   tall: ["kitchen_tall", "fridge", "wardrobe", "tall_cabinet", "shelf", "coat_rack"],
   living: ["sofa", "armchair", "bed", "bunk_bed", "bench", "corner_bench", "plant"],
   light: ["lamp_wall", "lamp_floor", "led_strip", "lamp_table"],
@@ -6502,6 +6505,15 @@ export class Fp3dEditor extends LitElement {
               ><input type="checkbox" .checked=${!!a.open} ?disabled=${!admin} @change=${(ev: Event) => this.updateOutdoor({ open: (ev.target as HTMLInputElement).checked || undefined })} />
               ${this.t("outdoor_open")}</label
             >`
+          : nothing}
+        ${a.type === "gazebo"
+          ? html`<label class="fp3d-field fp3d-wide"
+                >${this.t("gazebo_cover")}
+                <select ?disabled=${!admin} @change=${(e: Event) => this.updateOutdoor({ cover: (e.target as HTMLSelectElement).value as GazeboCover })}>
+                  ${GAZEBO_COVERS.map((c) => html`<option value=${c} ?selected=${c === (a.cover ?? "canvas")}>${this.t(`gazebo_cover_${c}` as I18nKey)}</option>`)}
+                </select></label
+              >
+              ${this.len(this.t("gazebo_rise"), a.rise ?? GAZEBO_RISE, (v) => this.updateOutdoor({ rise: Math.min(5, Math.max(0, round(v))) }), 0.05, 0)}`
           : nothing}
         ${a.type === "pergola"
           ? html`<label class="fp3d-check fp3d-wide"

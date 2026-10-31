@@ -8,7 +8,7 @@ import { BuildingController } from "./building-controller.ts";
 import "./components/room-panel.ts";
 import "./components/view3d.ts";
 import { languageReady, loadLanguage, translate, type I18nKey } from "./i18n.ts";
-import { infoStyles, readInfoHidden, renderInfoTiles, writeInfoHidden } from "./info-view.ts";
+import { infoStyles, infoWanted, readInfoHidden, renderInfoToggle, renderInfoTiles, writeInfoHidden } from "./info-view.ts";
 import type { Building } from "./model.ts";
 import { controls, tokens } from "./styles.ts";
 import { groundFloor } from "./solar.ts";
@@ -375,6 +375,7 @@ clearTimeout(this.cleanTimer);
     const accent = /^#[0-9a-f]{6}$/i.test(c?.accent ?? "") ? c!.accent : null;
     return html`<ha-card class="${this._night ? "fp3d-night" : ""} ${this._pseudoFull ? "fp3d-pseudo-full" : ""}" style=${accent ? `--fp3d-accent:${accent}` : ""} @pointerdown=${this.touch} @keydown=${this.onKey} @wheel=${this.touch}>
       <div class="fp3d-card-body ${tt ? "fp3d-tt" : ""}" style="height:${size}">
+        ${this.renderInfoButton(b)}
         ${b && b.floors.some((f) => f.rooms.length)
           ? html`<fp3d-view3d
               .hass=${this.tt.hass(this.hass)}
@@ -529,10 +530,16 @@ clearTimeout(this.cleanTimer);
    */
   private renderInfo(b: Building | null | undefined) {
     if (this._fullscreen || this._clean) return nothing;
-    return renderInfoTiles(this.hass, b, this._config?.info_cards, false, this._infoHidden, () => {
+    return renderInfoTiles(this.hass, b, this._config?.info_cards, false, this._infoHidden);
+  }
+
+  /** The button of the info tiles: it floats over the 3D view, so it takes no row of its own. */
+  private renderInfoButton(b: Building | null | undefined) {
+    if (this._fullscreen || this._clean || !infoWanted(this.hass, b, this._config?.info_cards, false)) return nothing;
+    return renderInfoToggle(this.hass, this._infoHidden, () => {
       this._infoHidden = !this._infoHidden;
       writeInfoHidden(this._infoHidden);
-    });
+    }, "fp3d-info-float");
   }
 
   static styles = [

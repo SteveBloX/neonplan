@@ -76,6 +76,7 @@ export const SYNONYMS: Record<string, string[]> = {
   printer_3d: ["3d drucker", "drucker", "imprimante 3d", "imprimante", "3d printer", "printer"],
   fireplace: ["kamin", "ofen", "cheminée", "cheminee", "poêle", "fireplace", "fire"],
   parking: ["auto", "wagen", "stellplatz", "car", "parking"],
+  bbq: ["grill", "barbecue", "bbq", "plancha"],
   led_strip: ["led", "led streifen", "lichtleiste", "led strip"],
   wall_socket: ["steckdose", "socket", "outlet"],
   wall_switch: ["lichtschalter", "schalter", "light switch", "switch"],

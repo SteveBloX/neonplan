@@ -536,7 +536,7 @@ SPA_SCHEMA = vol.Schema(
     extra=vol.ALLOW_EXTRA,
 )
 
-OUTDOOR_TYPES = ["lawn", "terrace", "path", "driveway", "pool", "bed", "wild", "hedge", "fence", "pergola", "balcony"]
+OUTDOOR_TYPES = ["lawn", "terrace", "path", "driveway", "pool", "bed", "wild", "hedge", "fence", "pergola", "gazebo", "balcony"]
 
 OUTDOOR_SCHEMA = vol.Schema(
     {
@@ -557,6 +557,9 @@ OUTDOOR_SCHEMA = vol.Schema(
         vol.Optional("bracing", default=False): bool,
         # pergola: the roof is covered with transparent plates
         vol.Optional("glazed", default=False): bool,
+        # gazebo: what its peaked roof is made of (None = canvas) and how far it rises above the eaves (m)
+        vol.Optional("cover", default=None): vol.Any(None, vol.In(["canvas", "plexi", "wood", "none"])),
+        vol.Optional("rise", default=None): vol.Any(None, vol.All(vol.Coerce(float), vol.Range(min=0, max=5))),
         # cut out of every area beneath it that contains it
         vol.Optional("cut", default=False): bool,
         # pools: round or oval, resized as a whole

@@ -1658,13 +1658,16 @@ export class Fp3dView3d extends LitElement {
     // the automatic look follows the sun (setTheme ignores a look it already shows)
     if (this.theme === "auto") v.setTheme(this.effectiveTheme());
     // the weather outside: clouds darken the sky, rain, snow and fog fall over the plot
-    const raw = this.weather && !this.dimmed && hasFeature("weather") ? weatherState(hass, weatherEntity(hass, this.weatherEntityId ?? b.settings.weather_entity), b.settings.rain_entity) : null;
-    const weather = raw ? limitEffects(raw, b.settings.weather_effects) : null;
+    // (fork: without the weather add-on only the rain shows – no clouds, snow, fog, lightning or sky; it stops on the roofs)
+    const proWeather = hasFeature("weather");
+    const raw = this.weather && !this.dimmed ? weatherState(hass, weatherEntity(hass, this.weatherEntityId ?? b.settings.weather_entity), b.settings.rain_entity) : null;
+    const full = raw ? limitEffects(raw, b.settings.weather_effects) : null;
+    const weather = full && !proWeather ? { ...full, snow: 0, fog: 0, cloud: 0, lightning: false, sky: false } : full;
     this.cloud = weather?.cloud ?? 0;
     this._sky = (elevation === null ? 0 : Math.min(1, Math.max(0, (elevation + 4) / 16))) * (1 - 0.45 * this.cloud);
     // with the feature on, the viewer always gets the weather (the sun and moon disc shows on clear days too)
     const disc = weather ? weather.sky : (b.settings.weather_effects ?? ["sky"]).includes("sky");
-    v.setWeather(this.weather && !this.dimmed && hasFeature("weather") ? { ...(weather ?? { rain: 0, snow: 0, fog: 0, cloud: 0, wind: 0 }), sky: this.skyColor(), disc } : null);
+    v.setWeather(this.weather && !this.dimmed && (proWeather || (weather && weather.rain > 0)) ? { ...(weather ?? { rain: 0, snow: 0, fog: 0, cloud: 0, wind: 0 }), sky: this.skyColor(), disc: proWeather ? disc : false } : null);
     this.watchLightning(!!weather?.lightning);
     this.applyTint();
     const hasEnergy = summary.grid !== null || summary.solar !== null || summary.battery !== null || summary.tariff !== null;
@@ -3608,7 +3611,7 @@ export class Fp3dView3d extends LitElement {
    * hung on the wall.
    */
   private robotObstacles(floor: Building["floors"][number], room: [number, number][]): [number, number][][] {
-    const OPEN_BELOW = new Set(["rug", "worktop", "table", "table_round", "coffee_table", "chair", "office_chair", "stool", "bar_stool", "bench", "desk", "robot_vacuum", "parking", "stairwell", "radiator", "ac_unit", "tv_wall", "kitchen_wall", "led_strip"]);
+    const OPEN_BELOW = new Set(["rug", "worktop", "table", "table_round", "coffee_table", "coffee_table_round", "garden_chair", "lounger", "chair", "office_chair", "stool", "bar_stool", "bench", "desk", "robot_vacuum", "parking", "stairwell", "radiator", "ac_unit", "tv_wall", "kitchen_wall", "led_strip"]);
     return floor.furniture
       .filter((m) => {
         if (OPEN_BELOW.has(m.type) || (m.type.startsWith("lamp_") && m.type !== "lamp_floor" && m.type !== "lamp_uplight")) return false;

@@ -2,7 +2,7 @@
 // furniture has the type "pack:<pack id>:<item id>". Every bundle (main, editor, 3D) keeps its own
 // registry, filled with setPacks() from the packs the backend returns.
 
-import { builtinBase, techBase, ELECTRIC_FURNITURE, FURNITURE_SIZE, LIFT_SPOTS, outdoorGround, pointInPolygon, spotDepth, surfaceHeight, WALL_LAMP_Y, type Floor, type Furniture } from "./model.ts";
+import { builtinBase, techBase, ELECTRIC_FURNITURE, FURNITURE_SIZE, LIFT_SPOTS, ON_SURFACE, outdoorGround, pointInPolygon, spotDepth, surfaceHeight, WALL_LAMP_Y, type Floor, type Furniture } from "./model.ts";
 import type { LampModel } from "./viewer/viewer3d.ts";
 
 /** A cooking zone of a pack cooktop: a thin disc lying on the item's top. */
@@ -303,6 +303,8 @@ export function mountBase(floor: Floor, f: Pick<Furniture, "type" | "x" | "z" | 
   // an access point under the ceiling, a slim water heater on the wall (drawn from 0 and lifted by this)
   const tech = techBase(f, floor.height);
   if (tech !== null) return tech;
+  // a microwave or a coffee machine stands on the worktop or table under it
+  if (ON_SURFACE.has(f.type)) return groundUnder(floor, f) + surfaceHeight(floor, f.x, f.z, f.h);
   // wall lights at the usual height, LED strips just under the ceiling
   if (f.type === "lamp_wall") return WALL_LAMP_Y;
   if (LIFT_SPOTS.has(f.type)) return Math.max(0, floor.height - spotDepth(f.type, f.h));

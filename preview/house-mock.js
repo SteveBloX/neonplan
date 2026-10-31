@@ -60,6 +60,19 @@ export async function loadHouse(url) {
     states[id] = invent(id, i);
     entities[id] = { entity_id: id, area_id: null };
   });
+  // ?gazebotest[=canvas|plexi|wood|none]: a square gazebo (3 × 3 m) on the lawn behind the house; with ?weather=rainy the rain shows on it
+  if (new URLSearchParams(location.search).has("gazebotest")) {
+    const floor = building.floors[0];
+    const cover = new URLSearchParams(location.search).get("gazebotest") || "canvas";
+    floor.outdoor = [...(floor.outdoor ?? []), { id: "outdoor_gazebo_test", type: "gazebo", points: [[7, 0.3], [10, 0.3], [10, 3.3], [7, 3.3]], cover, rise: 1, height: null, outline: true, offset: 0, slope: 0, slope_dir: "x", open: false, bracing: false, cut: false, pool_shape: null, above: false, depth: null, rim: null, pool: null, name: null, area_id: null }];
+  }
+  // ?outdoortest: one of each piece of outdoor furniture on the lawn behind the house
+  if (new URLSearchParams(location.search).has("outdoortest")) {
+    const floor = building.floors[0];
+    const sizes = { bar_l: [2.4, 2.0, 1.05], garden_chair: [0.6, 0.62, 0.85], garden_sofa: [1.9, 0.85, 0.8], lounger: [0.7, 1.95, 0.4], coffee_table_round: [0.7, 0.7, 0.4], parasol: [2.4, 2.4, 2.4], bbq: [0.9, 0.55, 1.0], bar_stool: [0.42, 0.42, 0.75] };
+    const at = [["bar_l", 4.5, 0.6, 0], ["bar_stool", 6.0, 1.9, 0], ["bar_stool", 6.7, 1.9, 0], ["garden_sofa", 9.5, 0.7, 0], ["coffee_table_round", 9.5, 2.0, 0], ["garden_chair", 8.4, 2.3, 200], ["garden_chair", 10.7, 2.3, 160], ["lounger", 12.2, 1.6, 0], ["parasol", 12.6, 4.2, 0], ["bbq", 15.4, 1.0, 0]];
+    at.forEach(([type, x, z, rotation], i) => floor.furniture.push({ id: `out_test_${i}`, type, x, z, rotation, w: sizes[type][0], d: sizes[type][1], h: sizes[type][2], variant: null }));
+  }
   // ?infotest: Tempo colours and a solar forecast, to try the info tiles under the card (otherwise the tiles stay away)
   if (new URLSearchParams(location.search).has("infotest")) {
     const add = (id, state, attributes = {}) => {

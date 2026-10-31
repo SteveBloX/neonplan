@@ -10,7 +10,7 @@ import "./components/view3d.ts";
 import { languageReady, loadLanguage, translate, type I18nKey } from "./i18n.ts";
 import type { Building, StartView } from "./model.ts";
 import { controls, tokens } from "./styles.ts";
-import { infoStyles, readInfoHidden, renderInfoTiles, writeInfoHidden } from "./info-view.ts";
+import { infoStyles, infoWanted, readInfoHidden, renderInfoToggle, renderInfoTiles, writeInfoHidden } from "./info-view.ts";
 import type { HomeAssistant } from "./types.ts";
 import type { MarkerMode } from "./components/view3d.ts";
 import type { HeatMode } from "./heatmap.ts";
@@ -912,8 +912,15 @@ export class Floorplan3dPanel extends LitElement {
     const floor = b.floors.find((f) => f.id === this._floorId);
     const roomFloors = floor ? [floor] : b.floors;
     const tt = this.tt.active;
+    // the info tiles: their button is the first chip of the room bar, the tiles come below it
+    const infoOn = !this._clean && !tt && infoWanted(this.hass, b, undefined, true);
+    const flipInfo = () => {
+      this._infoHidden = !this._infoHidden;
+      writeInfoHidden(this._infoHidden);
+    };
     return html`
       ${this._clean ? nothing : html`<nav class="fp3d-nav ${this._navWrap ? "fp3d-nav-wrap" : ""}" @wheel=${this.onNavWheel}>
+        ${infoOn ? renderInfoToggle(this.hass, this._infoHidden, flipInfo) : nothing}
         ${b.floors.length > 1
           ? html`<button class="fp3d-chip" aria-pressed=${this._floorId === null} @click=${() => {
                 this._floorId = null;
@@ -969,10 +976,7 @@ export class Floorplan3dPanel extends LitElement {
           ${this._navWrap ? "\u2194" : "\u2261"}
         </button>
       </nav>`}
-      ${this._clean || tt ? nothing : renderInfoTiles(this.hass, b, undefined, true, this._infoHidden, () => {
-            this._infoHidden = !this._infoHidden;
-            writeInfoHidden(this._infoHidden);
-          })}
+      ${infoOn ? renderInfoTiles(this.hass, b, undefined, true, this._infoHidden) : nothing}
       <div class="fp3d-stage-wrap ${this._roomId ? "fp3d-room-open" : ""} ${this._controlsRight ? "fp3d-side-right" : ""} ${tt ? "fp3d-tt" : ""}">
         <fp3d-view3d
           class="fp3d-body"

@@ -48,6 +48,7 @@ import {
 import type { Building, Floor, Furniture, Room, StartView } from "../model.ts";
 import { recolorLamps, SHADE_SENTINEL, shadeFactors } from "./lamp-colors.ts";
 import { centroid, fridgeDoorLinked, GANG_TYPES, outdoorZones, pointInPolygon, openingStyle, setTerrain, WALL_LAMP_Y, zonesOf } from "../model.ts";
+import { buildRainRoofs, type RainRoof } from "./rain-roofs.ts";
 import { placeWallPlate } from "../geometry/walls.ts";
 import { buildEarth } from "./earth.ts";
 import { clampIntoRoom } from "../geometry/snap.ts";
@@ -677,7 +678,7 @@ export class FloorplanViewer {
   /** The roof: one group with a part per floor it sits on (each part follows its floor). */
   private roof: {
     group: Group;
-    parts: { group: Group; floorId: string; rideId: string; base: number; lift: boolean; win: Group | null }[];
+    parts: { group: Group; floorId: string; rideId: string; base: number; lift: boolean; win: Group | null; sections: string[] }[];
     /** Roof windows over rooms of a lower floor: they follow that floor (#482). */
     below: { floorId: string; win: Group }[];
     solid: MeshBasicMaterial;
@@ -778,6 +779,8 @@ export class FloorplanViewer {
   private snow = new Points(new Geometry(), new PointsMaterial({ color: 0xf4f8ff, size: 0.14, transparent: true, opacity: 0.85, depthWrite: false }));
   private skyDisc = new Mesh(new CircleGeometry(1, 28), new MeshBasicMaterial({ color: 0xffd98a, transparent: true, opacity: 0, blending: AdditiveBlending, depthWrite: false }));
   private weatherBox = { x0: -10, x1: 10, z0: -10, z1: 10, y0: 0, y1: 8 };
+  /** The roofs that keep the rain off (built from the plan when the weather first needs them, again after a change of it). */
+  private rainRoofs: RainRoof[] | null = null;
   private weatherTimer: ReturnType<typeof setTimeout> | undefined;
   private weatherLast = 0;
   /** Heatmap colour per room id (null: normal floors). */
@@ -935,6 +938,7 @@ export class FloorplanViewer {
     const first = this.building === null;
     this.lastWake = performance.now();
     this.building = building;
+    this.rainRoofs = null;
     // this bundle's own copy of the ground (outdoor areas, earth around cellars)
     setTerrain(building);
     this.rebuild();
@@ -1599,6 +1603,30 @@ export class FloorplanViewer {
     obj.geometry = g;
   }
 
+  /**
+   * The roofs that keep the rain off, each with the height it stands at in the scene now: what stands outside rides on its
+   * floor, the house roof on its part. A roof that has faded away or floats off while one looks inside still keeps the
+   * rain out: it stays where the roof lies on its walls (the lift of the fade does not count).
+   */
+  private activeRainRoofs(): RainRoof[] {
+    if (!this.rainRoofs) this.rainRoofs = this.building ? buildRainRoofs(this.building) : [];
+    const roof = this.roof;
+    const out: RainRoof[] = [];
+    for (const r of this.rainRoofs) {
+      if (r.roof === null) {
+        const fv = this.floorMap.get(r.floorId);
+        if (!fv) continue;
+        r.dy = fv.group.position.y;
+      } else {
+        const part = roof?.parts.find((q) => (r.roof === "single" ? q.sections.length === 0 && q.floorId === r.floorId : q.sections.includes(r.roof!)));
+        if (!part) continue;
+        r.dy = part.group.position.y - this.roofLift();
+      }
+      out.push(r);
+    }
+    return out;
+  }
+
   /** Lets rain fall and snow drift; true while something moved. */
   private stepWeather(now: number): boolean {
     const w = this.weather;
@@ -1616,6 +1644,7 @@ export class FloorplanViewer {
       const a = this.rain.geometry.getAttribute("position") as Float32BufferAttribute;
       const p = a.array as Float32Array;
       const fall = (8 + 4 * w.rain) * dt;
+      const roofs = this.activeRainRoofs();
       for (let i = 0; i < p.length; i += 6) {
         let y = p[i + 1] - fall;
         let x = p[i] + drift * dt;
@@ -1624,6 +1653,23 @@ export class FloorplanViewer {
           x = b.x0 + Math.random() * (b.x1 - b.x0);
         }
         if (x > b.x1) x -= b.x1 - b.x0;
+        // a drop under a roof (the house, a gazebo, a pergola with plates) lands on it, runs off to its eave and falls from there
+        let hit: RainRoof | null = null;
+        let hitY = -Infinity;
+        for (const r of roofs) {
+          if (y > r.top + r.dy) continue;
+          const h = r.heightAt(x, p[i + 2]);
+          if (h !== null && y <= h + r.dy && h + r.dy > hitY) {
+            hit = r;
+            hitY = h + r.dy;
+          }
+        }
+        if (hit) {
+          const [dx, dyy, dz] = hit.drip();
+          x = dx;
+          y = dyy + hit.dy;
+          p[i + 2] = dz;
+        }
         p[i] = x;
         p[i + 1] = y;
         p[i + 3] = x - drift * 0.05;
@@ -3094,7 +3140,7 @@ export class FloorplanViewer {
         wins.add(g);
         below.push({ floorId, win: g });
       }
-      return { group: part, floorId: geo.floor.id, rideId: roofRider(this.building!, geo.floor, geo.sections ?? []), base: geo.base, lift: geo.lift !== false, win };
+      return { group: part, floorId: geo.floor.id, rideId: roofRider(this.building!, geo.floor, geo.sections ?? []), base: geo.base, lift: geo.lift !== false, win, sections: geo.sections ?? [] };
     });
     group.renderOrder = 8;
     this.scene.add(group);
@@ -4450,6 +4496,8 @@ export class FloorplanViewer {
               if (beside === this.roomId) return { floorId: fv.floor.id, roomId: beside };
             } else if (!glass && beside) return { floorId: fv.floor.id, roomId: beside };
           }
+          // furnishing: a device behind a wall that hides it is not grabbed through it
+          if (this.furnish && Math.abs(hit.face.normal.y) < 0.7 && this.opaqueWall(fv, hit.face.a)) return null;
         }
       } else if (hit.object === fv.floorMesh) {
         return { floorId: fv.floor.id, roomId: inRange(fv.geo.roomTris.map((r) => ({ id: r.roomId, start: r.start, end: r.end })), tri) ?? null };
@@ -4545,8 +4593,18 @@ export class FloorplanViewer {
       const list = hit.object === fv.lampMesh ? fv.lampFurnTris : fv.geo.furnitureTris;
       const id = list.find((r) => hit.faceIndex! >= r.start && hit.faceIndex! < r.end)?.id;
       if (id) return { fv, id, y: hit.point.y };
+      // a wall that is in the way (not glass, not cut away): what lies behind it is not seen, so it is not grabbed either
+      if (hit.object === fv.wallMesh && hit.face && Math.abs(hit.face.normal.y) < 0.7 && this.opaqueWall(fv, hit.face.a)) return null;
     }
     return null;
+  }
+
+  /** Whether the wall face at a vertex hides what is behind it: neither cut away (cut view) nor glass (walls facing the camera). */
+  private opaqueWall(fv: FloorView, vertex: number): boolean {
+    const fold = (fv.wallMesh.geometry.getAttribute("fold") as Float32BufferAttribute | undefined)?.getX(vertex) ?? 32;
+    const cutAway = this.wallMode === "cut" && Math.floor(fold / 16) === 0;
+    const glass = (fv.mask.glass.value & (1 << (fold % 16))) !== 0;
+    return !cutAway && !glass;
   }
 
   /** The item whose footprint (a little grown: a screen stands in front of its front) holds a point, the nearest one. */

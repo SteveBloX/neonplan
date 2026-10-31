@@ -1,4 +1,4 @@
-// The furniture library's index: every item the editor can place (the built-in kinds and the installed packs'
+﻿// The furniture library's index: every item the editor can place (the built-in kinds and the installed packs'
 // items), sorted by what it is (a sofa, a table, a lamp …) and which rooms it belongs to, with families of
 // variants (a dining table in 120, 160 and 200) folded into one card. Packs may say all this themselves
 // (group, room, family, variant – pack format fields since 1.23); older packs and the built-in kinds are
@@ -100,6 +100,23 @@ const BASIC: Record<string, [Kind, Room[]]> = {
   armchair: ["seating", ["living", "bedroom", "office"]],
   stool: ["seating", ["living", "bath", "kids"]],
   coffee_table: ["table", ["living"]],
+  coffee_table_round: ["table", ["garden", "living"]],
+  bar_l: ["kitchen", ["garden"]],
+  garden_chair: ["seating", ["garden"]],
+  garden_sofa: ["sofa", ["garden"]],
+  lounger: ["seating", ["garden"]],
+  parasol: ["deco", ["garden"]],
+  bbq: ["appliance", ["garden"]],
+  garden_shed: ["storage", ["garden"]],
+  hammock: ["seating", ["garden"]],
+  egg_chair: ["seating", ["living", "bedroom", "garden"]],
+  planter: ["plant", ["garden"]],
+  privacy_screen: ["deco", ["garden"]],
+  range_hood: ["appliance", ["kitchen"]],
+  microwave: ["appliance", ["kitchen"]],
+  coffee_machine: ["appliance", ["kitchen"]],
+  towel_radiator: ["heating", ["bath"]],
+  wall_mirror: ["deco", ["bath", "bedroom", "hall"]],
   tv_board: ["media", ["living", "bedroom"]],
   fireplace: ["heating", ["living", "bedroom"]],
   printer_3d: ["tech", ["office", "living", "utility"]],
