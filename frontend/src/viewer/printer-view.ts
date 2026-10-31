@@ -1,9 +1,11 @@
-// The moving parts of a 3D printer: the print head sliding along its rail, the bed rocking under it, the part growing
-// layer by layer while it prints, a status light and the chamber light. The frame stands in the item's still model
-// (furniture.ts); these parts go into the same moving mesh as awnings, gates and flames.
+// The moving parts of a 3D printer, after the Bambu Lab A1 mini (a bed slinger): the bed sliding front and back, the arm
+// that climbs the tower on the left as the part grows, the print head sliding along the arm, the part itself, and the
+// lights. The base and the tower stand in the item's still model (furniture.ts); these parts go into the same moving mesh
+// as awnings, gates and flames.
 
 import { Color } from "three";
 import type { Furniture } from "../model.ts";
+import { printerBedHalf } from "../printer-model.ts";
 import type { PrinterState } from "../printer.ts";
 import { DEG, type GeoBuffer } from "./geo.ts";
 
@@ -21,8 +23,8 @@ const RED = 0xff4a4a;
 const CYAN = 0x4fd8ff;
 const WARM = 0xffe9b8;
 
-/** Height of the bed above the item's floor (the frame's base is 8 cm). */
-const BED_Y = 0.115;
+/** Height of the bed's carriage above the item's floor (the base is 6 cm). */
+const BED_Y = 0.07;
 
 /** Where the printed part starts: the top of the bed plate. */
 export const PRINTER_BED_TOP = BED_Y + 0.012;
@@ -30,6 +32,11 @@ export const PRINTER_BED_TOP = BED_Y + 0.012;
 /** How much of the part is built: 0 … 1 (the progress; without one a printing printer builds and starts again). */
 export function printGrown(s: PrinterState, time: number): number {
   return s.phase === "done" ? 1 : s.progress !== null ? s.progress : s.phase === "printing" ? (time * 0.05) % 1 : 0;
+}
+
+/** How far the bed has slid along the item's depth (metres, local z): it rocks while the printer prints. */
+export function printerBedShift(s: PrinterState, w: number, d: number, time: number): number {
+  return s.phase === "printing" ? Math.sin(time * 0.9) * printerBedHalf(w, d) * 0.6 : 0;
 }
 
 /**
@@ -66,40 +73,43 @@ export function pushPrinter(buf: GeoBuffer, f: Pick<Furniture, "x" | "z" | "rota
   const d = Math.max(0.2, f.d);
   const h = Math.max(0.3, f.h);
   const printing = s.phase === "printing";
-  // the bed rocks front and back under the head while it prints
-  const bedZ = printing ? Math.sin(time * 0.9) * d * 0.07 : 0;
-  const inner = Math.min(w, d) / 2 - 0.045;
+  const bed = printerBedHalf(w, d);
+  // the bed slides front and back under the head while it prints
+  const bedZ = printerBedShift(s, w, d, time);
 
-  // the bed, and the part on it: it grows with the progress (without one it grows and starts again), whole when done
-  box(-inner, inner, BED_Y, BED_Y + 0.012, -inner + bedZ, inner + bedZ, PLATE, 0x3b4f80);
-  const room = h - BED_Y - 0.1;
+  // the bed: its carriage and the plate, and the part on it (it grows with the progress, whole when done)
+  box(-bed, bed, BED_Y - 0.014, BED_Y, -bed + bedZ, bed + bedZ, DIM, RAIL);
+  box(-bed, bed, BED_Y, PRINTER_BED_TOP, -bed + bedZ, bed + bedZ, PLATE, 0x3b4f80);
+  const room = h - PRINTER_BED_TOP - 0.15;
   const grown = printGrown(s, time);
-  // the real part (drawn by the viewer as a mesh of its own) replaces the stand-in block; the head rides on its top
+  // the real part (drawn by the viewer as a mesh of its own) replaces the stand-in block; the arm rides on its top
   const objH = Math.max(0, model ? model.height * grown : room * 0.82 * grown);
-  const objW = inner * 0.5;
-  if (!model && objH > 0.004) box(-objW / 2, objW / 2, BED_Y + 0.012, BED_Y + 0.012 + objH, -objW / 2 + bedZ, objW / 2 + bedZ, FILAMENT, FILAMENT_TOP);
+  const objW = bed * 0.5;
+  if (!model && objH > 0.004) box(-objW / 2, objW / 2, PRINTER_BED_TOP, PRINTER_BED_TOP + objH, -objW / 2 + bedZ, objW / 2 + bedZ, FILAMENT, FILAMENT_TOP);
 
-  // the head on its rail at the part's top, sliding across while it prints
-  const headY = BED_Y + 0.012 + objH + 0.035;
-  const headX = printing ? Math.sin(time * 2.6) * inner * 0.55 : inner * 0.55;
-  const railZ = -inner + 0.02;
-  box(-inner, inner, headY + 0.02, headY + 0.034, railZ - 0.012, railZ + 0.012, RAIL);
-  box(headX - 0.032, headX + 0.032, headY - 0.01, headY + 0.07, railZ - 0.03, railZ + 0.05, HEAD, 0x1b2740);
+  // the arm climbs the tower with the part, the head slides along it
+  const headBottom = Math.min(PRINTER_BED_TOP + objH + 0.035, h - 0.115);
+  const headX = printing ? Math.sin(time * 2.6) * bed * 0.8 : bed * 0.6;
+  const towerX = -w / 2 + 0.07;
+  box(-w / 2 - 0.005, towerX + 0.005, headBottom, headBottom + 0.08, -0.07, 0.07, HEAD, 0x1b2740);
+  box(towerX, bed + 0.035, headBottom + 0.03, headBottom + 0.055, -0.025, 0.025, RAIL, 0x4a62a0);
+  box(headX - 0.035, headX + 0.035, headBottom, headBottom + 0.075, -0.04, 0.04, HEAD, 0x1b2740);
   // the nozzle, orange while it heats
   const hot = printing || s.phase === "paused";
-  box(headX - 0.008, headX + 0.008, headY - 0.035, headY - 0.01, railZ + 0.016, railZ + 0.032, hot ? mix(0xff5a14, 0xffc040, pulse(6)) : DIM);
+  box(headX - 0.008, headX + 0.008, headBottom - 0.03, headBottom, -0.008, 0.008, hot ? mix(0xff5a14, 0xffc040, pulse(6)) : DIM);
   // a thread of filament from the nozzle to the part while it prints
-  if (printing) box(headX - 0.003, headX + 0.003, headY - 0.04, headY - 0.034, railZ + 0.021, railZ + 0.027, FILAMENT_TOP);
+  if (printing) box(headX - 0.003, headX + 0.003, headBottom - 0.036, headBottom - 0.03, -0.003, 0.003, FILAMENT_TOP);
+  // the light under the arm
+  if (s.light) box(towerX + 0.02, bed, headBottom + 0.026, headBottom + 0.03, -0.012, 0.012, WARM);
 
-  // the status light, a strip on the front under the lid
+  // the status light on the front of the base
   const strip = s.phase === "printing" ? mix(0x1a8a54, GREEN, pulse(3)) : s.phase === "paused" ? mix(0x8a5a10, AMBER, pulse(2)) : s.phase === "done" ? CYAN : s.phase === "failed" ? mix(0x8a1a1a, RED, pulse(8)) : DIM;
-  box(-w / 2 + 0.05, w / 2 - 0.05, h - 0.085, h - 0.065, d / 2, d / 2 + 0.008, strip);
-  // the progress bar on the front: a dark track and the part that is done
+  const x0 = -w / 2 + 0.05;
+  const x1 = w * 0.06;
+  box(x0, x1, 0.034, 0.046, d / 2, d / 2 + 0.004, strip);
+  // the progress bar under it: a dark track and the part that is done
   if (s.progress !== null && s.phase !== "idle" && s.phase !== "offline") {
-    const bw = w - 0.16;
-    box(-bw / 2, bw / 2, 0.02, 0.034, d / 2, d / 2 + 0.006, 0x0b111f);
-    box(-bw / 2, -bw / 2 + bw * s.progress, 0.02, 0.034, d / 2 + 0.006, d / 2 + 0.012, s.phase === "failed" ? RED : GREEN);
+    box(x0, x1, 0.012, 0.024, d / 2, d / 2 + 0.004, 0x0b111f);
+    box(x0, x0 + (x1 - x0) * s.progress, 0.012, 0.024, d / 2 + 0.004, d / 2 + 0.008, s.phase === "failed" ? RED : GREEN);
   }
-  // the chamber light: a warm panel under the lid
-  if (s.light) box(-inner + 0.02, inner - 0.02, h - 0.056, h - 0.052, -inner + 0.02, inner - 0.02, WARM);
 }

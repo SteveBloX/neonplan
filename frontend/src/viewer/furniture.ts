@@ -560,18 +560,17 @@ function waterHeater(b: Builder, w: number, d: number, h: number, wall: boolean)
   b.box(-r * 0.3, r * 0.3, h * 0.55, h * 0.65, r - 0.01, r + 0.01, C.dark);
 }
 
-/** A closed-chamber 3D printer frame: a base with its screen, four posts, a back panel and a lid, open to the sides so the print shows. */
+/**
+ * An open 3D printer after the Bambu Lab A1 mini: a base with its screen and one tower on the left. The arm that
+ * reaches over the bed, the bed that slides under it and the head are drawn by pushPrinter (they move).
+ */
 function printer3d(b: Builder, w: number, d: number, h: number): void {
-  const t = 0.024;
-  b.box(-w / 2, w / 2, 0, 0.08, -d / 2, d / 2, C.body, C.bodyTop, EDGE_FURN);
-  b.box(-w / 2 + 0.07, w / 2 - 0.07, 0.03, 0.064, d / 2, d / 2 + 0.004, C.dark);
-  for (const sx of [-1, 1])
-    for (const sz of [-1, 1]) b.box(sx < 0 ? -w / 2 : w / 2 - t, sx < 0 ? -w / 2 + t : w / 2, 0.08, h - 0.05, sz < 0 ? -d / 2 : d / 2 - t, sz < 0 ? -d / 2 + t : d / 2, C.metal, C.metal, EDGE_FURN);
-  b.box(-w / 2 + t, w / 2 - t, 0.08, h - 0.05, -d / 2, -d / 2 + 0.01, C.dark);
-  b.box(-w / 2, w / 2, h - 0.05, h, -d / 2, d / 2, C.white, C.whiteTop, EDGE_FURN);
-  // the outline of the glass door on the front
-  b.seg(-w / 2 + t, 0.09, d / 2, -w / 2 + t, h - 0.055, d / 2, EDGE_GLOW);
-  b.seg(w / 2 - t, 0.09, d / 2, w / 2 - t, h - 0.055, d / 2, EDGE_GLOW);
+  b.box(-w / 2, w / 2, 0, 0.06, -d / 2, d / 2, C.body, C.bodyTop, EDGE_FURN);
+  // the screen on the front right of the base
+  b.box(w * 0.12, w * 0.4, 0.014, 0.046, d / 2, d / 2 + 0.006, C.dark);
+  // the tower, with a light cap
+  b.box(-w / 2, -w / 2 + 0.07, 0.06, h - 0.03, -0.065, 0.065, C.dark, C.body, EDGE_FURN);
+  b.box(-w / 2, -w / 2 + 0.07, h - 0.03, h, -0.065, 0.065, C.white, C.whiteTop, EDGE_FURN);
 }
 
 /** A built-in fireplace: the wall piece around a fire opening with a door frame, a hearth and logs. */

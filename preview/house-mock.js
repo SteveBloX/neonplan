@@ -123,6 +123,13 @@ export async function loadHouse(url) {
     add("sensor.energy_production_tomorrow", "9.8", { unit_of_measurement: "kWh", device_class: "energy" });
     building.energy = { ...building.energy, consumption: "sensor.test_maison_puissance" };
     add("sensor.test_maison_puissance", "1340", { unit_of_measurement: "W", device_class: "power" });
+    // a water heater whose temperature and filling are ticked for the info tiles
+    const floor = building.floors[0];
+    const room = floor.rooms[0];
+    floor.furniture.push({ id: "info_test_heater", type: "water_heater", name: "Cumulus", x: room.points[0][0] + 0.5, z: room.points[0][1] + 0.5, rotation: 0, w: 0.56, d: 0.56, h: 1.5, variant: null, entity: "water_heater.test_cumulus", water_temp: "sensor.test_cumulus_temperature", water_fill: "sensor.test_cumulus_remplissage", info_temp: true, info_fill: true });
+    add("water_heater.test_cumulus", "eco", { current_temperature: 54 });
+    add("sensor.test_cumulus_temperature", "54", { unit_of_measurement: "°C", device_class: "temperature" });
+    add("sensor.test_cumulus_remplissage", "72", { unit_of_measurement: "%" });
   }
   // sun.sun is needed for the sun and the day/night look even when the plan does not link it
   states["sun.sun"] ??= invent("sun.sun", 0);

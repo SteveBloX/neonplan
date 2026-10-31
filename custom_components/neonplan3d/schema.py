@@ -339,6 +339,9 @@ FURNITURE_SCHEMA = vol.Schema(
         vol.Optional("water_temp"): vol.Any(None, vol.All(str, vol.Length(max=255))),
         # water heater: a sensor with how full the tank is (percent)
         vol.Optional("water_fill"): vol.Any(None, vol.All(str, vol.Length(max=255))),
+        # water heater: which values its card in the info tiles shows
+        vol.Optional("info_temp"): bool,
+        vol.Optional("info_fill"): bool,
         # wall switch and socket: one entry per gang (its entity, a socket's power sensor)
         vol.Optional("gangs"): vol.Any(
             None,
@@ -1009,6 +1012,9 @@ ENERGY_DEFAULTS = {
     "tempo_tomorrow": None,
     "forecast_today": None,
     "forecast_tomorrow": None,
+    "day_consumption": None,
+    "day_solar": None,
+    "day_grid": None,
 }
 
 # Power sensors in watts: grid positive = import, battery positive = discharging (both can be inverted)
@@ -1031,6 +1037,10 @@ ENERGY_SCHEMA = vol.Schema(
         vol.Optional("tempo_tomorrow", default=None): _ENTITY,
         vol.Optional("forecast_today", default=None): _ENTITY,
         vol.Optional("forecast_tomorrow", default=None): _ENTITY,
+        # the day card of the info tiles: sensors with today's energy (kWh); None = from the energy dashboard
+        vol.Optional("day_consumption", default=None): _ENTITY,
+        vol.Optional("day_solar", default=None): _ENTITY,
+        vol.Optional("day_grid", default=None): _ENTITY,
     },
     extra=vol.ALLOW_EXTRA,
 )

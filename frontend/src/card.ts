@@ -8,7 +8,7 @@ import { BuildingController } from "./building-controller.ts";
 import "./components/room-panel.ts";
 import "./components/view3d.ts";
 import { languageReady, loadLanguage, translate, type I18nKey } from "./i18n.ts";
-import { infoStyles, infoWanted, readInfoHidden, renderInfoToggle, renderInfoTiles, writeInfoHidden } from "./info-view.ts";
+import { EnergyDayController, infoStyles, infoWanted, readInfoHidden, renderInfoToggle, renderInfoTiles, writeInfoHidden } from "./info-view.ts";
 import type { Building } from "./model.ts";
 import { controls, tokens } from "./styles.ts";
 import { groundFloor } from "./solar.ts";
@@ -97,6 +97,8 @@ export class Floorplan3dCard extends LitElement {
   private readonly data = new BuildingController(this);
   /** Time travel (Pro, card option time_travel): the last 24 hours replayed, read-only. */
   private readonly tt = new TimeTravel(this);
+  /** Today's energy for the day card of the info tiles. */
+  private readonly day = new EnergyDayController(this, () => ({ hass: this.hass, active: !this._infoHidden && !this._fullscreen && !this._clean && this._config?.info_cards !== false }));
 
   constructor() {
     super();
@@ -530,7 +532,7 @@ clearTimeout(this.cleanTimer);
    */
   private renderInfo(b: Building | null | undefined) {
     if (this._fullscreen || this._clean) return nothing;
-    return renderInfoTiles(this.hass, b, this._config?.info_cards, false, this._infoHidden);
+    return renderInfoTiles(this.hass, b, this._config?.info_cards, false, this._infoHidden, this.day.value);
   }
 
   /** The button of the info tiles: it floats over the 3D view, so it takes no row of its own. */

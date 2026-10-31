@@ -128,7 +128,7 @@ export function proposeMeters(prefs: EnergyPrefs): { gas: string | null; water: 
 }
 
 /** How much counters (gas, water) went up since midnight, from the recorder's hourly statistics (null when it has none). */
-export async function fetchTodayChange(hass: HomeAssistant, ids: string[]): Promise<Map<string, number> | null> {
+export async function fetchTodayChange(hass: HomeAssistant, ids: string[], units?: Record<string, string>): Promise<Map<string, number> | null> {
   const midnight = new Date();
   midnight.setHours(0, 0, 0, 0);
   try {
@@ -138,10 +138,60 @@ export async function fetchTodayChange(hass: HomeAssistant, ids: string[]): Prom
       statistic_ids: ids,
       period: "hour",
       types: ["change"],
+      ...(units ? { units } : {}),
     });
     const out = new Map<string, number>();
     for (const id of ids) out.set(id, (rows?.[id] ?? []).reduce((s, r) => s + (typeof r.change === "number" ? r.change : 0), 0));
     return out;
+  } catch {
+    return null;
+  }
+}
+
+/** Today's energy in kWh: what the house used, what the sun made, what came from the grid. */
+export interface EnergyDay {
+  consumption: number | null;
+  solar: number | null;
+  grid: number | null;
+}
+
+/** The statistics of the energy dashboard's sources, by role. */
+export function energyDayIds(prefs: EnergyPrefs): { gridIn: string[]; gridOut: string[]; solar: string[]; batteryOut: string[]; batteryIn: string[] } {
+  const out = { gridIn: [] as string[], gridOut: [] as string[], solar: [] as string[], batteryOut: [] as string[], batteryIn: [] as string[] };
+  const add = (list: string[], id: string | undefined) => {
+    if (id && !list.includes(id)) list.push(id);
+  };
+  for (const s of prefs.energy_sources ?? []) {
+    if (s.type === "grid") {
+      for (const f of s.flow_from ?? []) add(out.gridIn, f.stat_energy_from);
+      for (const f of s.flow_to ?? []) add(out.gridOut, f.stat_energy_to);
+    } else if (s.type === "solar") add(out.solar, s.stat_energy_from);
+    else if (s.type === "battery") {
+      add(out.batteryOut, s.stat_energy_from);
+      add(out.batteryIn, s.stat_energy_to);
+    }
+  }
+  return out;
+}
+
+/** The day's totals from the statistics' changes since midnight (kWh); null where the dashboard has no such source. */
+export function energyDayFrom(ids: ReturnType<typeof energyDayIds>, change: Map<string, number>): EnergyDay {
+  const sum = (list: string[]) => (list.length ? list.reduce((a, id) => a + (change.get(id) ?? 0), 0) : null);
+  const gridIn = sum(ids.gridIn);
+  const solar = sum(ids.solar);
+  // what the house used: what came in (grid, sun, battery) less what went out (grid, battery)
+  const consumption = gridIn === null && solar === null ? null : Math.max(0, (gridIn ?? 0) + (solar ?? 0) + (sum(ids.batteryOut) ?? 0) - (sum(ids.gridOut) ?? 0) - (sum(ids.batteryIn) ?? 0));
+  return { consumption, solar, grid: gridIn };
+}
+
+/** Today's totals from the energy dashboard's sources and the recorder (null when there is no dashboard or no statistics). */
+export async function fetchEnergyDay(hass: HomeAssistant): Promise<EnergyDay | null> {
+  try {
+    const ids = energyDayIds(await hass.callWS<EnergyPrefs>({ type: "energy/get_prefs" }));
+    const all = [...new Set(Object.values(ids).flat())];
+    if (!all.length) return null;
+    const change = await fetchTodayChange(hass, all, { energy: "kWh" });
+    return change ? energyDayFrom(ids, change) : null;
   } catch {
     return null;
   }

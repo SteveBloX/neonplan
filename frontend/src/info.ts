@@ -1,7 +1,8 @@
 // The info tiles under the house card: the colour of today's and tomorrow's Tempo day, the power of the house now,
 // and the solar forecast. Pure functions (no Lit): the card draws what they return.
 
-import { energySummary, findConsumers } from "./energy.ts";
+import { entityName } from "./devices.ts";
+import { energySummary, findConsumers, type EnergyDay } from "./energy.ts";
 import type { Building, EnergySettings } from "./model.ts";
 import type { HassEntity, HomeAssistant } from "./types.ts";
 
@@ -62,7 +63,63 @@ export function findForecast(hass: HomeAssistant, e: Pick<EnergySettings, "forec
   };
 }
 
+/** The day card's values: the sensors chosen in the energy tool (today's kWh) win over what the energy dashboard's statistics say. */
+export function dayEnergy(hass: HomeAssistant, e: Pick<EnergySettings, "day_consumption" | "day_solar" | "day_grid">, fetched: EnergyDay | null): EnergyDay | null {
+  const own = (id: string | null | undefined) => (id && id !== "none" ? kwhOf(hass.states[id]) : null);
+  const day = {
+    consumption: own(e.day_consumption) ?? fetched?.consumption ?? null,
+    solar: own(e.day_solar) ?? fetched?.solar ?? null,
+    grid: own(e.day_grid) ?? fetched?.grid ?? null,
+  };
+  return day.consumption !== null || day.solar !== null || day.grid !== null ? day : null;
+}
+
+/** A water heater's card: what its settings ask to show (temperature, filling 0 … 1); null for what has no value. */
+export interface HeaterTile {
+  id: string;
+  name: string | null;
+  temp: number | null;
+  unit: string;
+  fill: number | null;
+}
+
+const entityOf = (v: string | null | undefined): string | null => (v && v !== "none" ? v : null);
+
+/** The cards of the water heaters that have temperature or filling ticked in their settings and a value to show. */
+export function heaterTiles(hass: HomeAssistant, building: Building): HeaterTile[] {
+  const out: HeaterTile[] = [];
+  for (const floor of building.floors) {
+    for (const f of floor.furniture) {
+      if (f.type !== "water_heater" || (!f.info_temp && !f.info_fill)) continue;
+      const main = entityOf(typeof f.entity === "string" ? f.entity : null);
+      const st = main ? hass.states[main] : undefined;
+      let temp: number | null = null;
+      let unit = "°C";
+      if (f.info_temp) {
+        const tempId = entityOf(f.water_temp);
+        const ts = tempId ? hass.states[tempId] : undefined;
+        if (ts && ts.state !== "" && Number.isFinite(Number(ts.state))) {
+          temp = Number(ts.state);
+          unit = String(ts.attributes.unit_of_measurement ?? unit);
+        } else if (typeof st?.attributes.current_temperature === "number") temp = st.attributes.current_temperature;
+      }
+      let fill: number | null = null;
+      if (f.info_fill) {
+        const fillId = entityOf(f.water_fill);
+        const fs = fillId ? hass.states[fillId] : undefined;
+        const raw = fs && fs.state !== "" ? Number(fs.state) : Number.NaN;
+        if (Number.isFinite(raw)) fill = Math.min(1, Math.max(0, fs!.attributes.unit_of_measurement === "%" || raw > 1 ? raw / 100 : raw));
+      }
+      if (temp === null && fill === null) continue;
+      out.push({ id: f.id, name: f.name || (main ? entityName(hass, main) : null), temp, unit, fill });
+    }
+  }
+  return out;
+}
+
 export interface InfoTiles {
+  /** The water heaters that ask for a card. */
+  heaters: HeaterTile[];
   tempo: { today: TempoColor | null; tomorrow: TempoColor | null; entity: string } | null;
   /** Watts: the house, the sun, the grid (+ import, - export), the battery (+ discharging) and its charge in %. */
   power: { house: number | null; solar: number | null; grid: number | null; battery: number | null; soc: number | null } | null;
@@ -82,6 +139,7 @@ export function infoTiles(hass: HomeAssistant, building: Building): InfoTiles {
   const sum = energySummary(hass, building, findConsumers(hass, building));
   const hasPower = sum.consumption !== null || sum.solar !== null || sum.grid !== null || sum.battery !== null;
   return {
+    heaters: heaterTiles(hass, building),
     tempo: tempoToday || tempoTomorrow ? { today: tempoToday, tomorrow: tempoTomorrow, entity: (t.today ?? t.tomorrow)! } : null,
     power: hasPower ? { house: sum.consumption, solar: sum.solar, grid: sum.grid, battery: sum.battery, soc: sum.soc } : null,
     forecast: fToday !== null || fTomorrow !== null ? { today: fToday, tomorrow: fTomorrow, entity: (f.today ?? f.tomorrow)! } : null,

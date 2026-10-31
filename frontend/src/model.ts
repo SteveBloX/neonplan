@@ -1,4 +1,4 @@
-﻿// Data model shared by editor, 3D view and backend (see custom_components/neonplan3d/schema.py).
+// Data model shared by editor, 3D view and backend (see custom_components/neonplan3d/schema.py).
 // Units are metres; x grows to the right, z grows downwards (as in the 2D editor).
 
 import { packItem } from "./packs.ts";
@@ -315,6 +315,9 @@ export interface Furniture {
   water_temp?: EntityRef;
   /** Water heater: a sensor with how full the tank is (0–100 %): the tank shows its filling in 3D. */
   water_fill?: EntityRef;
+  /** Water heater: the temperature and/or the filling are shown on a card of the info tiles. */
+  info_temp?: boolean;
+  info_fill?: boolean;
   /** Wall switch and socket (D523, D540, #593): one entry per gang – the entity it switches and, for a socket, its power sensor. */
   gangs?: Gang[] | null;
   /** Screens: pictures shown while an entity is in a state (first match wins; "*" = any state). */
@@ -1206,6 +1209,10 @@ export interface EnergySettings {
   /** The solar forecast for today and tomorrow in kWh (Forecast.Solar, Solcast); null = found by name. */
   forecast_today?: string | null;
   forecast_tomorrow?: string | null;
+  /** The day card of the info tiles: sensors with today's energy in kWh (consumption, solar generation, grid import); null = from the energy dashboard. */
+  day_consumption?: string | null;
+  day_solar?: string | null;
+  day_grid?: string | null;
 }
 
 /** A person and the sensor whose state names the room they are in (ESPresense, Bermuda, …). */
@@ -1825,7 +1832,7 @@ export const FURNITURE_SIZE: Record<FurnitureType, [number, number, number]> = {
   // a built-in fireplace: the wall piece it sits in, as wide as it is thick and tall as the room
   fireplace: [1.8, 0.4, 2.5],
   // a closed-chamber printer (Bambu Lab P1S / X1C size)
-  printer_3d: [0.42, 0.44, 0.5],
+  printer_3d: [0.35, 0.33, 0.37],
   // a 240 l wheelie bin; a wall mailbox
   waste_bin: [0.58, 0.73, 1.07],
   mailbox: [0.38, 0.14, 0.34],

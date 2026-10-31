@@ -10,7 +10,7 @@ import "./components/view3d.ts";
 import { languageReady, loadLanguage, translate, type I18nKey } from "./i18n.ts";
 import type { Building, StartView } from "./model.ts";
 import { controls, tokens } from "./styles.ts";
-import { infoStyles, infoWanted, readInfoHidden, renderInfoToggle, renderInfoTiles, writeInfoHidden } from "./info-view.ts";
+import { EnergyDayController, infoStyles, infoWanted, readInfoHidden, renderInfoToggle, renderInfoTiles, writeInfoHidden } from "./info-view.ts";
 import type { HomeAssistant } from "./types.ts";
 import type { MarkerMode } from "./components/view3d.ts";
 import type { HeatMode } from "./heatmap.ts";
@@ -176,6 +176,8 @@ export class Floorplan3dPanel extends LitElement {
   private locateLab: (() => void) | null = null;
   /** Time travel (Pro): the last 24 hours replayed, read-only. */
   private readonly tt = new TimeTravel(this);
+  /** Today's energy for the day card of the info tiles. */
+  private readonly day = new EnergyDayController(this, () => ({ hass: this.hass, active: !this._infoHidden && !this._clean && !this.tt.active }));
   /** A ?tt= link was looked at (it starts the time travel once). */
   private ttLinked = false;
 
@@ -976,7 +978,7 @@ export class Floorplan3dPanel extends LitElement {
           ${this._navWrap ? "\u2194" : "\u2261"}
         </button>
       </nav>`}
-      ${infoOn ? renderInfoTiles(this.hass, b, undefined, true, this._infoHidden) : nothing}
+      ${infoOn ? renderInfoTiles(this.hass, b, undefined, true, this._infoHidden, this.day.value) : nothing}
       <div class="fp3d-stage-wrap ${this._roomId ? "fp3d-room-open" : ""} ${this._controlsRight ? "fp3d-side-right" : ""} ${tt ? "fp3d-tt" : ""}">
         <fp3d-view3d
           class="fp3d-body"

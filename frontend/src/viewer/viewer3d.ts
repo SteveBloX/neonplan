@@ -76,7 +76,7 @@ import { GROUND, groundFace, groundFloor, roofFaces, roofWindowRoom, wallFaces }
 import { buildSolarLive, solarLiveMaterial, writeSolarLevels, type SolarLive } from "./solar-live.ts";
 import { pushGate } from "./gate.ts";
 import { pushFlames } from "./fireplace.ts";
-import { printGrown, pushPrinter, PRINTER_BED_TOP } from "./printer-view.ts";
+import { printerBedShift, printGrown, pushPrinter, PRINTER_BED_TOP } from "./printer-view.ts";
 import { printerSignature, type PrinterState } from "../printer.ts";
 import { modelScale, trianglesUpTo, type PrinterModel } from "../printer-model.ts";
 import { buildSpas, disposeSpas, fadeSpas, pushSpaUnit } from "./spa-view.ts";
@@ -2099,7 +2099,7 @@ export class FloorplanViewer {
   /** The height in metres the real part of a printer's print has when it is whole, or undefined without one. */
   private printerPartHeight(f: Furniture): number | undefined {
     const model = this.printerModels.get(f.id);
-    return model ? model.size[1] * modelScale(model.size, f.w, f.d, Math.max(0.2, f.h) - PRINTER_BED_TOP - 0.1) : undefined;
+    return model ? model.size[1] * modelScale(model.size, f.w, f.d, Math.max(0.3, f.h) - PRINTER_BED_TOP - 0.15) : undefined;
   }
 
   /** The meshes of the real parts: made once per part, then only their transform and the number of printed triangles change. */
@@ -2117,7 +2117,7 @@ export class FloorplanViewer {
       const model = f.type === "printer_3d" ? this.printerModels.get(f.id) : undefined;
       const state = model ? this.printers.get(f.id) : undefined;
       if (!model || !state || state.phase === "idle" || state.phase === "offline") continue;
-      const scale = modelScale(model.size, f.w, f.d, Math.max(0.2, f.h) - PRINTER_BED_TOP - 0.1);
+      const scale = modelScale(model.size, f.w, f.d, Math.max(0.3, f.h) - PRINTER_BED_TOP - 0.15);
       let part = fv.printerParts.get(f.id);
       if (!part) {
         const geometry = new Geometry();
@@ -2130,7 +2130,9 @@ export class FloorplanViewer {
         fv.group.add(mesh);
       }
       const a = f.rotation * DEG;
-      part.mesh.position.set(f.x, mountBase(fv.floor, f) + PRINTER_BED_TOP, f.z);
+      // the bed slides under the head: so does the part on it
+      const shift = printerBedShift(state, f.w, f.d, time);
+      part.mesh.position.set(f.x - shift * Math.sin(a), mountBase(fv.floor, f) + PRINTER_BED_TOP, f.z + shift * Math.cos(a));
       part.mesh.rotation.set(0, -a, 0);
       part.mesh.scale.set((f.mirror ? -1 : 1) * scale, scale, scale);
       const count = trianglesUpTo(model, printGrown(state, time) * model.size[1]);

@@ -97,13 +97,21 @@ export function trianglesUpTo(model: Pick<PrinterModel, "lows" | "triangles">, h
   return lo;
 }
 
+/** Half the side of a printer's bed in metres: the printer is drawn after the Bambu Lab A1 mini, whose 180 mm bed is about a half of its width. */
+export function printerBedHalf(w: number, d: number): number {
+  return Math.min(Math.max(0.2, w), Math.max(0.2, d)) * 0.27;
+}
+
+/** The millimetres of a printer's bed side (the A1 mini's). */
+export const BED_MM = 180;
+
 /**
  * Metres per millimetre of the part in a printer of `w` × `d` metres and `room` metres of height above the bed: true
- * scale on a 256 mm bed (the one of most Bambu Lab printers), shrunk when the part would not fit.
+ * scale on a 180 mm bed, shrunk when the part would not fit.
  */
 export function modelScale(size: [number, number, number], w: number, d: number, room: number): number {
-  const bed = Math.min(w, d) / 2 - 0.045;
-  const nominal = (bed * 2) / 256;
+  const bed = printerBedHalf(w, d);
+  const nominal = (bed * 2) / BED_MM;
   const fit = Math.min((bed * 2 * 0.98) / (Math.max(size[0], size[2]) || 1), room / (size[1] || 1));
   return Math.min(nominal, fit);
 }

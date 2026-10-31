@@ -1,9 +1,10 @@
 // The info tiles (Tempo colours, power of the house, solar forecast) as markup: the panel draws them under its room
 // bar, the dashboard card under the 3D view. What they show comes from info.ts.
 
-import { css, html, nothing } from "lit";
+import { css, html, nothing, type ReactiveController, type ReactiveControllerHost } from "lit";
+import { fetchEnergyDay, type EnergyDay } from "./energy.ts";
 import { formatNumber, translate, type I18nKey } from "./i18n.ts";
-import { infoTiles, type TempoColor } from "./info.ts";
+import { dayEnergy, infoTiles, type TempoColor } from "./info.ts";
 import type { Building } from "./model.ts";
 import type { HomeAssistant } from "./types.ts";
 
@@ -15,7 +16,35 @@ import type { HomeAssistant } from "./types.ts";
 export function infoWanted(hass: HomeAssistant | undefined, b: Building | null | undefined, force: boolean | undefined, powerAlone: boolean): boolean {
   if (!hass || !b || force === false) return false;
   const tiles = infoTiles(hass, b);
-  return !!tiles.tempo || !!tiles.forecast || (powerAlone && !!tiles.power) || force === true;
+  return !!tiles.tempo || !!tiles.forecast || tiles.heaters.length > 0 || (powerAlone && !!tiles.power) || force === true;
+}
+
+/** Today's energy totals for the day card: fetched from the energy dashboard's statistics while the tiles are open, at most every five minutes. */
+export class EnergyDayController implements ReactiveController {
+  value: EnergyDay | null = null;
+  private last = 0;
+  private busy = false;
+
+  private readonly host: ReactiveControllerHost;
+  private readonly source: () => { hass: HomeAssistant | undefined; active: boolean };
+
+  constructor(host: ReactiveControllerHost, source: () => { hass: HomeAssistant | undefined; active: boolean }) {
+    this.host = host;
+    this.source = source;
+    host.addController(this);
+  }
+
+  hostUpdate(): void {
+    const { hass, active } = this.source();
+    if (!hass || !active || this.busy || Date.now() - this.last < 300000) return;
+    this.busy = true;
+    this.last = Date.now();
+    void fetchEnergyDay(hass).then((day) => {
+      this.busy = false;
+      this.value = day;
+      this.host.requestUpdate();
+    });
+  }
 }
 
 /** The small button that folds and unfolds the tiles: it sits in a row of the host that exists anyway (the host keeps the state, see readInfoHidden). */
@@ -26,13 +55,15 @@ export function renderInfoToggle(hass: HomeAssistant | undefined, hidden: boolea
   </button>`;
 }
 
-export function renderInfoTiles(hass: HomeAssistant | undefined, b: Building | null | undefined, force: boolean | undefined, powerAlone: boolean, hidden: boolean) {
+export function renderInfoTiles(hass: HomeAssistant | undefined, b: Building | null | undefined, force: boolean | undefined, powerAlone: boolean, hidden: boolean, fetched: EnergyDay | null = null) {
   if (hidden || !hass || !b || !infoWanted(hass, b, force, powerAlone)) return nothing;
   const tiles = infoTiles(hass, b);
+  const today = dayEnergy(hass, b.energy, fetched);
   const t = (k: I18nKey) => translate(hass, k);
   const power = (w: number) => (Math.abs(w) >= 1000 ? `${formatNumber(hass, w / 1000, 1)} kW` : `${Math.round(w)} W`);
   const day = (label: string, color: TempoColor | null) => html`<span class="fp3d-info-day fp3d-info-${color ?? "none"}"><i></i>${label}<b>${color ? t(`info_${color}` as I18nKey) : "–"}</b></span>`;
   const stat = (icon: string, label: string, value: string, tone = "") => html`<span class="fp3d-info-stat ${tone}">${ico(icon)}<span><small>${label}</small><b>${value}</b></span></span>`;
+  const kwh = (v: number) => `${formatNumber(hass, v, v < 100 ? 1 : 0)} kWh`;
   const p = tiles.power;
   return html`<div class="fp3d-info" role="group" aria-label=${t("info_label")}>
     ${tiles.tempo ? html`<div class="fp3d-info-tile"><span class="fp3d-info-name fp3d-info-tempo">${ico(ICON.calendar)}${t("info_tempo")}</span>${day(t("info_today"), tiles.tempo.today)}${day(t("info_tomorrow"), tiles.tempo.tomorrow)}</div>` : nothing}
@@ -48,6 +79,21 @@ export function renderInfoTiles(hass: HomeAssistant | undefined, b: Building | n
           <span class="fp3d-info-name fp3d-info-sun">${ico(ICON.forecast)}${t("info_forecast")}</span>
           ${tiles.forecast.today !== null ? stat(ICON.sun, t("info_today"), `${formatNumber(hass, tiles.forecast.today, 1)} kWh`, "fp3d-info-sun") : nothing}
           ${tiles.forecast.tomorrow !== null ? stat(ICON.sunrise, t("info_tomorrow"), `${formatNumber(hass, tiles.forecast.tomorrow, 1)} kWh`, "fp3d-info-sun") : nothing}
+        </div>`
+      : nothing}
+    ${tiles.heaters.map(
+      (h) => html`<div class="fp3d-info-tile">
+        <span class="fp3d-info-name fp3d-info-heat">${ico(ICON.heater)}${h.name || t("furn_water_heater")}</span>
+        ${h.temp !== null ? stat(ICON.thermometer, t("info_heater_temp"), `${formatNumber(hass, h.temp, 0)} ${h.unit}`, "fp3d-info-heat") : nothing}
+        ${h.fill !== null ? stat(ICON.tank, t("info_heater_fill"), `${Math.round(h.fill * 100)} %`, "fp3d-info-water") : nothing}
+      </div>`,
+    )}
+    ${today
+      ? html`<div class="fp3d-info-tile">
+          <span class="fp3d-info-name">${ico(ICON.bolt)}${t("info_energy_day")}</span>
+          ${today.consumption !== null ? stat(ICON.house, t("info_day_consumption"), kwh(today.consumption)) : nothing}
+          ${today.solar !== null ? stat(ICON.sun, t("info_day_solar"), kwh(today.solar), "fp3d-info-sun") : nothing}
+          ${today.grid !== null ? stat(ICON.import, t("info_day_grid"), kwh(today.grid)) : nothing}
         </div>`
       : nothing}
   </div>`;
@@ -83,6 +129,10 @@ const ICON = {
   battery: "M3 8h15v8H3zM18 11h3v2h-3M6 10v4M9 10v4",
   calendar: "M5 6h14v14H5zM5 10h14M9 3v4M15 3v4",
   forecast: "M7 19a4 4 0 0 1 0-8 5 5 0 0 1 9.6 1.5A3.3 3.3 0 0 1 16.5 19zM12 3v1.5M5.6 5.6l1 1M18.4 5.6l-1 1",
+  heater: "M7 4h10v16H7zM7 8h10M10 12c0 1.5 2 1.5 2 3s-2 1.5-2 0M14 12v3",
+  thermometer: "M10 14.5V5a2 2 0 0 1 4 0v9.5a4 4 0 1 1-4 0zM12 8v8",
+  tank: "M7 4h10v16H7zM7 12c3 1.5 7-1.5 10 0",
+  bolt: "M13 3L5 13h6l-1 8 8-10h-6z",
 };
 
 const ico = (path: string) =>
@@ -157,6 +207,13 @@ export const infoStyles = css`
   .fp3d-info-sun .fp3d-info-ico,
   .fp3d-info-sun.fp3d-info-name {
     color: #ffb347;
+  }
+  .fp3d-info-heat .fp3d-info-ico,
+  .fp3d-info-heat.fp3d-info-name {
+    color: #ff7a3a;
+  }
+  .fp3d-info-water .fp3d-info-ico {
+    color: #4fb6ff;
   }
   .fp3d-info-green .fp3d-info-ico {
     color: #4cd680;

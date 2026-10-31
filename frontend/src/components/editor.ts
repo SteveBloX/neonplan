@@ -11467,7 +11467,10 @@ export class Fp3dEditor extends LitElement {
           ? html`${this.entitySelect(this.t("info_tempo_today"), e.tempo_today ?? null, findTempo(this.hass, { tempo_today: null, tempo_tomorrow: e.tempo_tomorrow }).today, this.entityOptions((id) => id.startsWith("sensor.")), (v) => this.setEnergy({ tempo_today: v === "none" ? null : v }))}
             ${this.entitySelect(this.t("info_tempo_tomorrow"), e.tempo_tomorrow ?? null, findTempo(this.hass, { tempo_today: e.tempo_today, tempo_tomorrow: null }).tomorrow, this.entityOptions((id) => id.startsWith("sensor.")), (v) => this.setEnergy({ tempo_tomorrow: v === "none" ? null : v }))}
             ${this.entitySelect(this.t("info_forecast_today"), e.forecast_today ?? null, findForecast(this.hass, { forecast_today: null, forecast_tomorrow: e.forecast_tomorrow }).today, this.entityOptions((id) => numberish(id) && /^(Wh|kWh|MWh)$/.test(attr(id, "unit_of_measurement") ?? "")), (v) => this.setEnergy({ forecast_today: v === "none" ? null : v }))}
-            ${this.entitySelect(this.t("info_forecast_tomorrow"), e.forecast_tomorrow ?? null, findForecast(this.hass, { forecast_today: e.forecast_today, forecast_tomorrow: null }).tomorrow, this.entityOptions((id) => numberish(id) && /^(Wh|kWh|MWh)$/.test(attr(id, "unit_of_measurement") ?? "")), (v) => this.setEnergy({ forecast_tomorrow: v === "none" ? null : v }))}`
+            ${this.entitySelect(this.t("info_forecast_tomorrow"), e.forecast_tomorrow ?? null, findForecast(this.hass, { forecast_today: e.forecast_today, forecast_tomorrow: null }).tomorrow, this.entityOptions((id) => numberish(id) && /^(Wh|kWh|MWh)$/.test(attr(id, "unit_of_measurement") ?? "")), (v) => this.setEnergy({ forecast_tomorrow: v === "none" ? null : v }))}
+            ${this.entitySelect(this.t("info_day_consumption_sensor"), e.day_consumption ?? null, undefined, this.entityOptions((id) => numberish(id) && /^(Wh|kWh|MWh)$/.test(attr(id, "unit_of_measurement") ?? "")), (v) => this.setEnergy({ day_consumption: v === "none" ? null : v }))}
+            ${this.entitySelect(this.t("info_day_solar_sensor"), e.day_solar ?? null, undefined, this.entityOptions((id) => numberish(id) && /^(Wh|kWh|MWh)$/.test(attr(id, "unit_of_measurement") ?? "")), (v) => this.setEnergy({ day_solar: v === "none" ? null : v }))}
+            ${this.entitySelect(this.t("info_day_grid_sensor"), e.day_grid ?? null, undefined, this.entityOptions((id) => numberish(id) && /^(Wh|kWh|MWh)$/.test(attr(id, "unit_of_measurement") ?? "")), (v) => this.setEnergy({ day_grid: v === "none" ? null : v }))}`
           : nothing}
       </div>
       <p class="fp3d-sub">${this.t("info_hint")}</p>
@@ -12292,7 +12295,15 @@ export class Fp3dEditor extends LitElement {
         ? this.entitySelect(this.t("ap_clients_sensor"), f.clients ?? null, undefined, sensors, (v) => this.updateFurniture({ clients: v && v !== "none" ? v : null }))
         : html`${this.entitySelect(this.t("heater_temp"), f.water_temp ?? null, undefined, sensors, (v) => this.updateFurniture({ water_temp: v && v !== "none" ? v : null }))}
             ${this.entitySelect(this.t("heater_fill"), f.water_fill ?? null, undefined, this.entityOptions((id) => /^(sensor|input_number|number)\./.test(id)), (v) => this.updateFurniture({ water_fill: v && v !== "none" ? v : null }))}
-            ${this.entitySelect(this.t("furn_power"), typeof f.power === "string" && f.power !== "none" ? f.power : null, undefined, this.entityOptions((id) => this.isPowerSensor(id)), (v) => this.updateFurniture({ power: v && v !== "none" ? v : "none" }))}`}
+            ${this.entitySelect(this.t("furn_power"), typeof f.power === "string" && f.power !== "none" ? f.power : null, undefined, this.entityOptions((id) => this.isPowerSensor(id)), (v) => this.updateFurniture({ power: v && v !== "none" ? v : "none" }))}
+            <label class="fp3d-check fp3d-wide"
+              ><input type="checkbox" .checked=${!!f.info_temp} ?disabled=${!admin} @change=${(ev: Event) => this.updateFurniture({ info_temp: (ev.target as HTMLInputElement).checked || undefined })} />
+              ${this.t("heater_info_temp")}</label
+            >
+            <label class="fp3d-check fp3d-wide"
+              ><input type="checkbox" .checked=${!!f.info_fill} ?disabled=${!admin} @change=${(ev: Event) => this.updateFurniture({ info_fill: (ev.target as HTMLInputElement).checked || undefined })} />
+              ${this.t("heater_info_fill")}</label
+            >`}
       <p class="fp3d-sub fp3d-wide">${this.t(ap ? "ap_hint" : "heater_hint")}</p>
       <div class="fp3d-form">${this.markerSelect(f.marker ?? null, (v) => this.updateFurniture({ marker: v }))}${this.iconInput(f.icon, (v) => this.updateFurniture({ icon: v }))}</div>
     </div>`;

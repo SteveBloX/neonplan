@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { decodePrinterModel, modelScale, trianglesUpTo, type PrinterModelPayload } from "./printer-model.ts";
+import { decodePrinterModel, modelScale, printerBedHalf, trianglesUpTo, type PrinterModelPayload } from "./printer-model.ts";
 import { printerJob } from "./printer.ts";
 import type { HomeAssistant } from "./types.ts";
 
@@ -42,10 +42,9 @@ test("the printed part is the prefix of triangles up to a height", () => {
   assert.equal(trianglesUpTo(m, 10), 2);
 });
 
-test("the part is true to scale on a 256 mm bed and shrinks to fit what is too big", () => {
+test("the part is true to scale on a 180 mm bed and shrinks to fit what is too big", () => {
   const w = 0.42;
-  const bed = w / 2 - 0.045;
-  const nominal = (bed * 2) / 256;
+  const nominal = (printerBedHalf(w, w) * 2) / 180;
   assert.ok(Math.abs(modelScale([100, 50, 100], w, w, 0.4) - nominal) < 1e-9);
   assert.ok(modelScale([400, 50, 400], w, w, 0.4) < nominal);
   assert.ok(modelScale([100, 900, 100], w, w, 0.4) < nominal);
