@@ -138,9 +138,10 @@ function copyFonts() {
 // editor 946 KB on 2026-10-29: the power outage picker offers fitting sources only (#831)
 // main 724 KB on 2026-10-29 for the 3D safety net on graphics chips that fail on the sun effects (#827), the 24-hour clock from the profile (#823) and their texts
 // main 726 KB on 2026-10-29: announcements from automations shown and spoken on the screens
+// fork: main 822 KB and card editor 304 KB on 2026-10-31 for the flat 2D plan (tab and card, with the furniture symbols, turning, area, energy pins), the push button and their texts
 // fork: main 786 KB on 2026-10-31 for the water heater and energy-of-the-day cards of the info tiles
 // fork: 780/882/996/294 KB for the real print part of the 3D printers, the Nest Hub and the media panel, plus the fill look and the per-module power sensors of solar fields, the gate, the solar info cards, the fireplace, the spa, the tank level, the glazed pergola and the alarm panel
-const BUDGET = { "neonplan3d.js": 786 * 1024, "neonplan3d-fun.js": 40 * 1024, "neonplan3d-voice.js": 60 * 1024, "neonplan3d-locate.js": 160 * 1024, "neonplan3d-timetravel.js": 120 * 1024, "neonplan3d-3d.js": 882 * 1024, "neonplan3d-editor.js": 996 * 1024, "neonplan3d-card-editor.js": 294 * 1024 };
+const BUDGET = { "neonplan3d.js": 822 * 1024, "neonplan3d-fun.js": 40 * 1024, "neonplan3d-voice.js": 60 * 1024, "neonplan3d-locate.js": 160 * 1024, "neonplan3d-timetravel.js": 120 * 1024, "neonplan3d-3d.js": 882 * 1024, "neonplan3d-editor.js": 996 * 1024, "neonplan3d-card-editor.js": 304 * 1024 };
 
 copyFonts();
 if (watch) {

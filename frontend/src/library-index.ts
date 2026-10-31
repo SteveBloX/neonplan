@@ -179,6 +179,7 @@ const BASIC: Record<string, [Kind, Room[]]> = {
   mailbox: ["household", ["garden", "hall"]],
   wall_switch: ["tech", []],
   wall_socket: ["tech", []],
+  push_button: ["tech", []],
   wifi_ap: ["tech", []],
   water_heater: ["heating", ["utility", "bath", "garage"]],
 };

@@ -263,6 +263,9 @@ export function furnitureSymbol(type: string, w: number, d: number): Part[] | ty
       return [rect(-w / 2, -d / 2, w / 2, -d / 2 + 0.03, "fp3d-sym-fill"), ellipse(0, 0.01, w * 0.4, d * 0.4)];
     case "led_strip":
       return [line(-w / 2, 0, w / 2, 0, "fp3d-sym-strong")];
+    case "push_button":
+      // the plate with its round button, and the ring that makes it findable
+      return [rect(-w / 2, -d / 2, w / 2, d / 2, "fp3d-sym-fill"), circle(0, d / 2, w * 0.28), ellipse(0, d / 2, w / 2 + 0.06, 0.09)];
     case "wall_switch":
     case "wall_socket":
       // the frame on the wall and a ring around it: a few centimetres are hard to find in the plan otherwise

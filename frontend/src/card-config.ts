@@ -6,6 +6,32 @@ import type { Quality, WallMode } from "./viewer/viewer3d.ts";
 /** Where the clock sits: a corner, or none. */
 export type ClockPos = "off" | "tl" | "tr" | "bl" | "br";
 
+/** The flat plan card (neonplan3d-plan-card): the house from above, drawn flat – light and easy to hit on a phone. */
+export interface PlanCardConfig {
+  type: string;
+  /** The floor it starts on (its id); the ground floor without one. */
+  floor?: string;
+  /** A fixed height in pixels; without one the plan takes the height it needs. */
+  height?: number;
+  /** The furniture drawn flat (default true). */
+  furniture?: boolean;
+  /** The names of the rooms (default true). */
+  room_names?: boolean;
+  /** The temperature and the humidity of the rooms (default: temperature on, humidity off). */
+  temperature?: boolean;
+  humidity?: boolean;
+  /** The pins of the devices (default true). */
+  devices?: boolean;
+  /** The floor buttons with several floors (default true). */
+  floor_buttons?: boolean;
+  /** The angle of the view: the plan turned clockwise by this many degrees (0–359, default 0). */
+  rotation?: number;
+  /** The part of the (turned) plan to show, in metres; chosen by dragging a frame over the plan in the editor. Without it the whole plan shows. */
+  area?: { x: number; z: number; w: number; h: number };
+  /** The accent colour of the card, "#rrggbb". */
+  accent?: string;
+}
+
 export interface CardConfig {
   type: string;
   floor?: string;

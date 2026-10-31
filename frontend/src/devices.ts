@@ -1393,6 +1393,14 @@ export function floorControls(hass: HomeAssistant, floor: Floor): { lights: stri
   return { lights: [...lights], covers: [...covers] };
 }
 
+/** Domains whose entities do something when tapped instead of being on or off: a push button's MQTT button, a script, a scene. */
+const PRESS_DOMAINS = new Set(["button", "input_button", "script", "scene", "automation"]);
+
+/** The service a tap runs on a push-type entity (button.press, script.turn_on …), or null for an entity that is switched or opened instead. */
+export function pressCall(entityId: string): [domain: string, service: string] | null {
+  return PRESS_DOMAINS.has(domainOf(entityId)) ? favoriteCall(entityId) : null;
+}
+
 /** The service a favourite runs when tapped: scenes and scripts start, buttons are pressed, the rest toggles. */
 export function favoriteCall(entityId: string): [domain: string, service: string] {
   const domain = entityId.split(".")[0];

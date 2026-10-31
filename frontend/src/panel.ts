@@ -7,6 +7,8 @@ import { countView } from "./diagnostics.ts";
 import { loadEditor } from "./load-editor.ts";
 import "./components/room-panel.ts";
 import "./components/view3d.ts";
+import "./components/plan2d.ts";
+import { planOptions, type PlanOptions } from "./plan-options.ts";
 import { languageReady, loadLanguage, translate, type I18nKey } from "./i18n.ts";
 import type { Building, StartView } from "./model.ts";
 import { controls, tokens } from "./styles.ts";
@@ -34,7 +36,16 @@ import type { FloorStack, Quality, WallMode } from "./viewer/viewer3d.ts";
 /** The corners of the clock, as arrows in the view menu (the full name is the button's title). */
 const CLOCK_ARROW: Record<Exclude<ClockPos, "off">, string> = { tl: "↖", tr: "↗", bl: "↙", br: "↘" };
 
-type Mode = "view" | "editor" | "extensions";
+type Mode = "view" | "plan" | "editor" | "extensions";
+
+/** The flat plan's choices, kept on the device. */
+function savedPlanOptions(): PlanOptions {
+  try {
+    return planOptions(JSON.parse(localStorage.getItem("neonplan3d.plan_options") ?? "null"));
+  } catch {
+    return planOptions(null);
+  }
+}
 
 /** View preferences belong to the device (a wall tablet wants other settings than a desktop). */
 const prefs = {
@@ -61,6 +72,7 @@ export class Floorplan3dPanel extends LitElement {
     route: { attribute: false },
     panel: { attribute: false },
     _mode: { state: true },
+    _plan: { state: true },
     _newOffers: { state: true },
     _readyPacks: { state: true },
     _shopConnected: { state: true },
@@ -109,6 +121,8 @@ export class Floorplan3dPanel extends LitElement {
   declare route: unknown;
   declare panel: unknown;
   private declare _mode: Mode;
+  /** What the flat plan (the 2D tab) shows. */
+  private declare _plan: PlanOptions;
   /** Shop offers not seen yet (a dot on the extensions tab). */
   private declare _newOffers: number;
   /** Bought packs waiting here: updates and packs not installed yet (a gift such as a fun pack too). */
@@ -186,6 +200,7 @@ export class Floorplan3dPanel extends LitElement {
     super();
     this.narrow = false;
     this._mode = "view";
+    this._plan = savedPlanOptions();
     this._newOffers = 0;
     this._readyPacks = 0;
     this._shopConnected = null;
@@ -581,17 +596,20 @@ export class Floorplan3dPanel extends LitElement {
         ${this._clean && this._mode === "view" ? nothing : html`<header class="fp3d-header">
           <ha-menu-button .hass=${this.hass} .narrow=${this.narrow}></ha-menu-button>
           <h1>NeonPlan 3D</h1>
-          ${this.isAdmin
+          ${this.isAdmin || b?.floors.some((f) => f.rooms.length)
             ? html`<div class="fp3d-seg" role="tablist">
                 <button role="tab" aria-pressed=${this._mode === "view"} @click=${() => this.setMode("view")}>${this.t("view")}</button>
-                <button role="tab" aria-pressed=${this._mode === "editor"} @click=${() => this.setMode("editor")}>${this.t("editor")}</button>
-                <button role="tab" class="fp3d-tab-ext" aria-pressed=${this._mode === "extensions"} @click=${() => this.setMode("extensions")}>
-                  ✦ ${this.t("ext_tab")}${this._readyPacks
-                    ? html`<span class="fp3d-badge" title=${this.t("ext_badge_ready_hint")}>⬇ ${this.t("ext_badge_ready", { n: this._readyPacks })}</span>`
-                    : this._newOffers
-                      ? html`<span class="fp3d-badge" title=${this.t("offers_dot")}>${this.t("ext_badge_new", { n: this._newOffers })}</span>`
-                      : nothing}
-                </button>
+                ${b?.floors.some((f) => f.rooms.length) ? html`<button role="tab" aria-pressed=${this._mode === "plan"} @click=${() => this.setMode("plan")}>${this.t("plan_tab")}</button>` : nothing}
+                ${this.isAdmin
+                  ? html`<button role="tab" aria-pressed=${this._mode === "editor"} @click=${() => this.setMode("editor")}>${this.t("editor")}</button>
+                      <button role="tab" class="fp3d-tab-ext" aria-pressed=${this._mode === "extensions"} @click=${() => this.setMode("extensions")}>
+                        ✦ ${this.t("ext_tab")}${this._readyPacks
+                          ? html`<span class="fp3d-badge" title=${this.t("ext_badge_ready_hint")}>⬇ ${this.t("ext_badge_ready", { n: this._readyPacks })}</span>`
+                          : this._newOffers
+                            ? html`<span class="fp3d-badge" title=${this.t("offers_dot")}>${this.t("ext_badge_new", { n: this._newOffers })}</span>`
+                            : nothing}
+                      </button>`
+                  : nothing}
               </div>`
             : nothing}
           <span class="fp3d-grow"></span>
@@ -769,7 +787,9 @@ export class Floorplan3dPanel extends LitElement {
             ? this.renderEditor(b)
             : this._mode === "extensions" && this.isAdmin
               ? this.renderExtensions()
-              : this.renderView(b)
+              : this._mode === "plan"
+                ? this.renderPlan(b)
+                : this.renderView(b)
           : nothing}
         ${this.renderGift()}
       </div>
@@ -900,6 +920,22 @@ export class Floorplan3dPanel extends LitElement {
     nav.scrollLeft += e.deltaY;
     e.preventDefault();
   };
+
+  /** The 2D tab: the flat plan with the switches for what it shows. */
+  private renderPlan(b: Building) {
+    const o = this._plan;
+    const set = (patch: Partial<PlanOptions>) => {
+      this._plan = { ...o, ...patch };
+      prefs.set("plan_options", JSON.stringify(this._plan));
+    };
+    const chip = (key: keyof PlanOptions, label: I18nKey) => html`<button class="fp3d-chip" aria-pressed=${o[key]} @click=${() => set({ [key]: !o[key] })}>${this.t(label)}</button>`;
+    return html`
+      <div class="fp3d-plan-bar" role="group" aria-label=${this.t("plan_options")}>
+        ${chip("furniture", "plan_furniture")} ${chip("names", "plan_names")} ${chip("temperature", "plan_temperature")} ${chip("humidity", "plan_humidity")} ${chip("devices", "plan_devices")}
+      </div>
+      <fp3d-plan2d class="fp3d-plan" fit .hass=${this.hass} .building=${b} .options=${o}></fp3d-plan2d>
+    `;
+  }
 
   private renderView(b: Building) {
     if (!b.floors.length || !b.floors.some((f) => f.rooms.length)) {
@@ -1520,6 +1556,18 @@ export class Floorplan3dPanel extends LitElement {
         width: 1px;
         margin: 4px 4px;
         background: var(--fp3d-line);
+      }
+      .fp3d-plan-bar {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        padding: 8px 12px 0;
+      }
+      .fp3d-plan {
+        flex: 1;
+        min-height: 0;
+        padding: 8px 12px 12px;
+        box-sizing: border-box;
       }
       .fp3d-stage-wrap {
         position: relative;

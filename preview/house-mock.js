@@ -127,6 +127,19 @@ export async function loadHouse(url) {
     const floor = building.floors[0];
     const room = floor.rooms[0];
     floor.furniture.push({ id: "info_test_heater", type: "water_heater", name: "Cumulus", x: room.points[0][0] + 0.5, z: room.points[0][1] + 0.5, rotation: 0, w: 0.56, d: 0.56, h: 1.5, variant: null, entity: "water_heater.test_cumulus", water_temp: "sensor.test_cumulus_temperature", water_fill: "sensor.test_cumulus_remplissage", info_temp: true, info_fill: true });
+    // the energy devices with their power: a meter, an inverter and a battery in the first room
+    floor.furniture.push(
+      { id: "info_test_meter", type: "meter", x: room.points[0][0] + 0.4, z: room.points[0][1] + 1.2, rotation: 0, w: 0.4, d: 0.2, h: 0.6, variant: null, power: "sensor.test_zaehler_leistung" },
+      { id: "info_test_inverter", type: "inverter", x: room.points[0][0] + 0.9, z: room.points[0][1] + 1.2, rotation: 0, w: 0.5, d: 0.2, h: 0.5, variant: null, power: "sensor.test_wr_leistung" },
+      { id: "info_test_battery", type: "home_battery", x: room.points[0][0] + 1.5, z: room.points[0][1] + 1.2, rotation: 0, w: 0.5, d: 0.2, h: 0.8, variant: null, power: "sensor.test_akku_leistung", soc: "sensor.test_akku_ladung" },
+    );
+    add("sensor.test_zaehler_leistung", "-820", { unit_of_measurement: "W", device_class: "power" });
+    add("sensor.test_wr_leistung", "3.4", { unit_of_measurement: "kW", device_class: "power" });
+    add("sensor.test_akku_leistung", "250", { unit_of_measurement: "W", device_class: "power" });
+    add("sensor.test_akku_ladung", "81", { unit_of_measurement: "%", device_class: "battery" });
+    // a push button that presses an MQTT button (a computer's sleep)
+    floor.furniture.push({ id: "info_test_button", type: "push_button", name: "Veille PC", x: room.points[0][0] + 1.4, z: room.points[0][1] + 0.1, rotation: 0, w: 0.085, d: 0.02, h: 0.085, variant: null, gangs: [{ entity: "button.test_pc_veille" }] });
+    add("button.test_pc_veille", "2026-10-31T09:00:00+00:00");
     add("water_heater.test_cumulus", "eco", { current_temperature: 54 });
     add("sensor.test_cumulus_temperature", "54", { unit_of_measurement: "°C", device_class: "temperature" });
     add("sensor.test_cumulus_remplissage", "72", { unit_of_measurement: "%" });

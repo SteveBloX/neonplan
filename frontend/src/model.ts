@@ -1419,6 +1419,7 @@ export const FURNITURE_TYPES = [
   "lamp_fan",
   "wifi_ap",
   "water_heater",
+  "push_button",
 ] as const;
 
 /** Furniture library sections (the editor lists them in this order). */
@@ -1433,7 +1434,7 @@ export const FURNITURE_GROUPS: Record<string, FurnitureType[]> = {
   vehicles: ["parking"],
   outdoor: ["awning", "gate", "bar_l", "bar_stool", "garden_chair", "garden_sofa", "lounger", "hammock", "egg_chair", "bench", "coffee_table_round", "table_round", "parasol", "bbq", "garden_shed", "planter", "privacy_screen"],
   household: ["waste_bin", "mailbox"],
-  switches: ["wall_switch", "wall_socket", "wifi_ap", "water_heater"],
+  switches: ["wall_switch", "wall_socket", "push_button", "wifi_ap", "water_heater"],
 };
 
 /** Energy devices: placed and set up in the Energy tool (stored like furniture, not in the library). */
@@ -1602,6 +1603,7 @@ export function builtinBase(f: Pick<Furniture, "type" | "h"> & { variant?: strin
       // a wall mailbox and a mailbox bank hang on the wall
       return f.variant === "bank" ? 0.75 : f.variant === "pole" || f.variant === "pillar" || f.variant === "parcel" ? 0 : 1.0;
     case "wall_switch":
+    case "push_button":
       return 1.05;
     case "wall_socket":
       // an outdoor socket sits a little higher
@@ -1643,7 +1645,8 @@ export function splitAliases(text: string): string[] | undefined {
 }
 
 /** Wall switches and sockets: up to four gangs in one frame, each with its own entity (D523, #593). */
-export const GANG_TYPES = new Set<string>(["wall_switch", "wall_socket"]);
+/** A push button (an MQTT button that puts a computer to sleep, a script, a scene) is a single-gang plate that presses what it is linked to. */
+export const GANG_TYPES = new Set<string>(["wall_switch", "wall_socket", "push_button"]);
 export const MAX_GANGS = 4;
 
 /** The gangs of a wall switch or socket (at least one, empty when nothing is linked). */
@@ -1838,6 +1841,7 @@ export const FURNITURE_SIZE: Record<FurnitureType, [number, number, number]> = {
   mailbox: [0.38, 0.14, 0.34],
   // a single plate; more gangs make it wider (gangPlateWidth)
   wall_switch: [0.085, 0.012, 0.085],
+  push_button: [0.085, 0.02, 0.085],
   wall_socket: [0.085, 0.014, 0.085],
   // a ceiling access point (a UniFi disc); a standing hot water tank
   wifi_ap: [0.2, 0.2, 0.04],

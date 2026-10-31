@@ -424,14 +424,25 @@
       if (params.has("card")) {
         // ?card: the dashboard card next to its visual editor (like Home Assistant's card dialog)
         document.querySelector("neonplan3d-panel").remove();
-        const CardClass = customElements.get("neonplan3d-card");
+        // ?plancard: the flat 2D plan card instead (&humidity=1, &furniture=0 … switch its parts)
+        const tag = params.has("plancard") ? "neonplan3d-plan-card" : "neonplan3d-card";
+        const CardClass = customElements.get(tag);
         const wrap = document.createElement("div");
         wrap.style.cssText = `display:grid;grid-template-columns:${params.has("noeditor") ? "1fr" : "420px 1fr"};gap:24px;padding:24px;font-family:Figtree,Roboto,sans-serif;--primary-text-color:#e1e1e1;--secondary-text-color:#9b9b9b;--card-background-color:#1c1c1c;--primary-color:#03a9f4;--divider-color:rgba(225,225,225,.2)`;
         const editorBox = document.createElement("div");
         editorBox.style.cssText = "background:#1c1c1c;border-radius:12px;padding:20px";
         const editor = await CardClass.getConfigElement();
-        const card = document.createElement("neonplan3d-card");
-        let config = {
+        const card = document.createElement(tag);
+        let config = params.has("plancard")
+          ? {
+              type: "custom:neonplan3d-plan-card",
+              ...(params.get("floor") ? { floor: params.get("floor") } : {}),
+              ...(params.get("h") ? { height: Number(params.get("h")) } : {}),
+              ...(params.get("furniture") === "0" ? { furniture: false } : {}),
+              ...(params.get("names") === "0" ? { room_names: false } : {}),
+              ...(params.get("humidity") === "1" ? { humidity: true } : {}),
+            }
+          : {
           type: "custom:neonplan3d-card",
           quality: "low",
           floor: params.get("floor") || "eg",

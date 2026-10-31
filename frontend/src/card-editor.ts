@@ -7,6 +7,8 @@ import { labOn, UNRELEASED } from "./features.ts";
 import { CARD_CONTROLS, type CardConfig, type CardControl } from "./card-config.ts";
 import { languageReady, loadLanguage, translate, type I18nKey } from "./i18n.ts";
 import type { HomeAssistant } from "./types.ts";
+// the flat plan card's editor shares this bundle (it only loads when a card dialog opens)
+import "./plan-card-editor.ts";
 
 /** Defaults of the card: options at their default are left out of the config. */
 const DEFAULTS: Partial<CardConfig> = {

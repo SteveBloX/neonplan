@@ -522,6 +522,13 @@ function wallPlate(b: Builder, w: number, d: number, h: number, n: number, socke
   }
 }
 
+/** Push button: a flat plate on the wall (the back on the wall, front at +z) with a round cap in the middle. */
+function pushButton(b: Builder, w: number, d: number, h: number): void {
+  b.box(-w / 2, w / 2, 0, h, -d / 2, d / 2, C.white, C.whiteTop, EDGE_FURN);
+  const r = Math.min(w, h) * 0.3;
+  b.lyingCyl("z", 0, d / 2, h / 2 - r, h / 2 + r, 0.008, r * 2, C.dark, C.dark, 16, EDGE_FAINT);
+}
+
 /** Wi-Fi access point: a flat disc under the ceiling (its LED ring below) or a square plate on the wall (ring in front). */
 function wifiAp(b: Builder, w: number, d: number, h: number, wall: boolean): void {
   if (wall) {
@@ -2034,6 +2041,16 @@ function buildFurniture(buf: GeoBuffer, lines: LineBuffer, shadow: GeoBuffer, f:
       const p0 = buf.p.length;
       const l0 = lines.p.length;
       wallPlate(b, w, d, h, gangsOf(f).length, f.type === "wall_socket", f.variant === "outdoor");
+      const lift = builtinBase(f);
+      for (let i = p0 + 1; i < buf.p.length; i += 3) buf.p[i] += lift;
+      for (let i = l0 + 1; i < lines.p.length; i += 3) lines.p[i] += lift;
+      return;
+    }
+    case "push_button": {
+      // a plate on the wall with a round cap, drawn at its own height like the wall switch; never a shadow on the floor
+      const p0 = buf.p.length;
+      const l0 = lines.p.length;
+      pushButton(b, w, d, h);
       const lift = builtinBase(f);
       for (let i = p0 + 1; i < buf.p.length; i += 3) buf.p[i] += lift;
       for (let i = l0 + 1; i < lines.p.length; i += 3) lines.p[i] += lift;

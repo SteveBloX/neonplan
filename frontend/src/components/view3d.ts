@@ -26,6 +26,7 @@ import { carState, type CarState, heatSensorOn, roomClimateValue,
   isStatusSensor,
   floorControls,
   favoriteCall,
+  pressCall,
   runButton,
   climateModeGlow,
   cooktopLevel,
@@ -3230,7 +3231,8 @@ export class Fp3dView3d extends LitElement {
         }
       }
       if (st && !isUnavailable(st)) reachable = true;
-      const active = st ? isActive(st) : (w ?? 0) > 5;
+      // a pressed button has no on or off: its state is the time of the last press
+      const active = ent && pressCall(ent) ? false : st ? isActive(st) : (w ?? 0) > 5;
       if (!active) return;
       on++;
       const lit = st && kindOf(st.entity_id) === "light" ? lightGlow(st) : null;
@@ -3259,7 +3261,7 @@ export class Fp3dView3d extends LitElement {
       x: at.x,
       z: at.z,
       y: f.h + 0.2 + at.y,
-      icon: mdiIcon(f.icon || (socket ? "power-socket-de" : "light-switch")),
+      icon: mdiIcon(f.icon || (socket ? "power-socket-de" : f.type === "push_button" ? "gesture-tap-button" : "light-switch")),
       name: f.name || (ids.length === 1 && first ? entityName(hass, first) : furnitureName(hass, f.type)),
       ownName: f.name || undefined,
       showName: !!f.show_name,
@@ -3270,7 +3272,8 @@ export class Fp3dView3d extends LitElement {
       glow: null,
       power: power ?? undefined,
       furnitureId: f.id,
-      show: f.marker ?? undefined,
+      // a push button is only there to be pressed: its pin always shows
+      show: f.marker ?? (f.type === "push_button" ? "always" : undefined),
       fromFurniture: true,
     };
   }
@@ -5777,6 +5780,13 @@ export class Fp3dView3d extends LitElement {
     // a detection pin opens its sensor
     if (entityId.startsWith("detect:")) {
       openMoreInfo(this, entityId.slice(7));
+      return;
+    }
+    // a button, a script or a scene is pressed (a push button's MQTT button that puts a computer to sleep), not switched
+    const press = pressCall(entityId);
+    if (press && this.hass) {
+      if (this.confirmSet.has(entityId) && !confirm(translate(this.hass, "confirm_switch", { name: entityName(this.hass, entityId) }))) return;
+      void this.hass.callService(press[0], press[1], { entity_id: entityId });
       return;
     }
     const kind = kindOf(entityId);
