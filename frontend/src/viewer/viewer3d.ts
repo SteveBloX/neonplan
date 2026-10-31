@@ -76,8 +76,9 @@ import { GROUND, groundFace, groundFloor, roofFaces, roofWindowRoom, wallFaces }
 import { buildSolarLive, solarLiveMaterial, writeSolarLevels, type SolarLive } from "./solar-live.ts";
 import { pushGate } from "./gate.ts";
 import { pushFlames } from "./fireplace.ts";
-import { pushPrinter } from "./printer-view.ts";
+import { printGrown, pushPrinter, PRINTER_BED_TOP } from "./printer-view.ts";
 import { printerSignature, type PrinterState } from "../printer.ts";
+import { modelScale, trianglesUpTo, type PrinterModel } from "../printer-model.ts";
 import { buildSpas, disposeSpas, fadeSpas, pushSpaUnit } from "./spa-view.ts";
 import { spaSignature, type SpaPiece } from "../spa.ts";
 import { buildSolarFill, fillKeyAt, solarFillMaterial, writeFillLevels, type SolarFill } from "./solar-fill.ts";
@@ -585,6 +586,8 @@ interface FloorView {
   screenPics: Map<string, { url: string; mesh: Mesh; texture: Texture | null }>;
   /** The buttons drawn on the screens that show a media player (by furniture id). */
   mediaCtl: Map<string, { mesh: Mesh; playing: boolean; entity: string; texture: Texture }>;
+  /** The real parts of the running prints inside the 3D printers (by furniture id). */
+  printerParts: Map<string, { mesh: Mesh; model: PrinterModel; scale: number }>;
   /** Content signatures: meshes are only rebuilt when these change. */
   flowLayout: string;
   glowSig: string;
@@ -2081,6 +2084,60 @@ export class FloorplanViewer {
     for (const s of this.printers.values()) if (s.phase === "printing") return true;
     return false;
   }
+
+  /** The real parts of the running prints by furniture id (fetched from the printers); a printer without one draws a stand-in block. */
+  private printerModels = new Map<string, PrinterModel>();
+
+  setPrinterModels(models: Map<string, PrinterModel>): void {
+    const same = models.size === this.printerModels.size && [...models].every(([id, m]) => this.printerModels.get(id) === m);
+    if (same) return;
+    this.printerModels = models;
+    for (const fv of this.floors) if (fv.floor.furniture.some((f) => f.type === "printer_3d")) this.buildFridges(fv);
+    this.invalidate();
+  }
+
+  /** The height in metres the real part of a printer's print has when it is whole, or undefined without one. */
+  private printerPartHeight(f: Furniture): number | undefined {
+    const model = this.printerModels.get(f.id);
+    return model ? model.size[1] * modelScale(model.size, f.w, f.d, Math.max(0.2, f.h) - PRINTER_BED_TOP - 0.1) : undefined;
+  }
+
+  /** The meshes of the real parts: made once per part, then only their transform and the number of printed triangles change. */
+  private updatePrinterParts(fv: FloorView): void {
+    const time = performance.now() / 1000;
+    for (const [id, part] of fv.printerParts) {
+      const f = fv.floor.furniture.find((x) => x.id === id);
+      const state = this.printers.get(id);
+      if (f && state && state.phase !== "idle" && state.phase !== "offline" && this.printerModels.get(id) === part.model) continue;
+      fv.group.remove(part.mesh);
+      part.mesh.geometry.dispose();
+      fv.printerParts.delete(id);
+    }
+    for (const f of fv.floor.furniture) {
+      const model = f.type === "printer_3d" ? this.printerModels.get(f.id) : undefined;
+      const state = model ? this.printers.get(f.id) : undefined;
+      if (!model || !state || state.phase === "idle" || state.phase === "offline") continue;
+      const scale = modelScale(model.size, f.w, f.d, Math.max(0.2, f.h) - PRINTER_BED_TOP - 0.1);
+      let part = fv.printerParts.get(f.id);
+      if (!part) {
+        const geometry = new Geometry();
+        geometry.setAttribute("position", new Float32BufferAttribute(model.positions, 3));
+        geometry.setAttribute("color", new Float32BufferAttribute(model.colors, 3));
+        const mesh = new Mesh(geometry, fv.materials.lamps);
+        mesh.frustumCulled = false;
+        part = { mesh, model, scale };
+        fv.printerParts.set(f.id, part);
+        fv.group.add(mesh);
+      }
+      const a = f.rotation * DEG;
+      part.mesh.position.set(f.x, mountBase(fv.floor, f) + PRINTER_BED_TOP, f.z);
+      part.mesh.rotation.set(0, -a, 0);
+      part.mesh.scale.set((f.mirror ? -1 : 1) * scale, scale, scale);
+      const count = trianglesUpTo(model, printGrown(state, time) * model.size[1]);
+      part.mesh.geometry.setDrawRange(0, count * 3);
+      part.mesh.visible = count > 0;
+    }
+  }
   /** Spas (a pool with its entities): the pieces drawn now, a signature of them, when the pump units were last redrawn. */
   private spas: SpaPiece[] = [];
   private spaSig = "";
@@ -2255,8 +2312,10 @@ export class FloorplanViewer {
     // 3D printers: head, part and lights
     for (const f of fv.floor.furniture) {
       const ps = f.type === "printer_3d" ? this.printers.get(f.id) : undefined;
-      if (ps) pushPrinter(buf, f, mountBase(fv.floor, f), ps, performance.now() / 1000);
+      const height = ps ? this.printerPartHeight(f) : undefined;
+      if (ps) pushPrinter(buf, f, mountBase(fv.floor, f), ps, performance.now() / 1000, height !== undefined && ps.phase !== "idle" && ps.phase !== "offline" ? { height } : undefined);
     }
+    this.updatePrinterParts(fv);
     // fireplaces: the flames of a fire that burns
     for (const f of fv.floor.furniture) if (f.type === "fireplace" && this.fires.get(f.id)) pushFlames(buf, f, mountBase(fv.floor, f), performance.now() / 1000);
     // the pump units of the spas on this floor, with their pipes
@@ -3049,6 +3108,7 @@ export class FloorplanViewer {
         screenSig: "",
         screenPics: new Map(),
         mediaCtl: new Map(),
+        printerParts: new Map(),
         flowLayout: "",
         glowSig: "",
         lampShapeSig: "",

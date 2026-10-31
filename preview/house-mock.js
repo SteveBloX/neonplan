@@ -86,6 +86,24 @@ export async function loadHouse(url) {
       entities[id] = { entity_id: id, area_id: null };
     }
   }
+  // ?printertest[=<percent>]: a 3D printer on a table in the living room, printing; its real part is a made-up vase (see the printer/model call)
+  if (new URLSearchParams(location.search).has("printertest")) {
+    const floor = building.floors[0];
+    const room = floor.rooms.find((r) => r.name === "Salon") ?? floor.rooms[0];
+    const xs = room.points.map((p) => p[0]);
+    const zs = room.points.map((p) => p[1]);
+    const cx = (Math.min(...xs) + Math.max(...xs)) / 2;
+    const cz = (Math.min(...zs) + Math.max(...zs)) / 2;
+    const percent = new URLSearchParams(location.search).get("printertest") || "60";
+    floor.furniture.push({ id: "printer_test", type: "printer_3d", x: cx, z: cz, rotation: 0, w: 0.42, d: 0.42, h: 0.46, variant: null, entity: "sensor.test_p1s_print_status", printer_model: true });
+    const add = (id, state, attributes = {}) => {
+      states[id] = { entity_id: id, state, attributes: { friendly_name: title(id), ...attributes } };
+      entities[id] = { entity_id: id, area_id: null };
+    };
+    add("sensor.test_p1s_print_status", percent === "100" ? "finish" : "running");
+    add("sensor.test_p1s_print_progress", percent === "100" ? "100" : percent, { unit_of_measurement: "%" });
+    add("sensor.test_p1s_task_name", "Vase");
+  }
   // ?outdoortest: one of each piece of outdoor furniture on the lawn behind the house
   if (new URLSearchParams(location.search).has("outdoortest")) {
     const floor = building.floors[0];

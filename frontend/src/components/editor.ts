@@ -362,6 +362,8 @@ export class Fp3dEditor extends LitElement {
     _bgLevel: { state: true },
     _bgOpen: { state: true },
     _shiftZ: { state: true },
+    _printerAccess: { state: true },
+    _printerForm: { state: true },
     hass: { attribute: false },
     building: { attribute: false },
     narrow: { type: Boolean },
@@ -611,6 +613,10 @@ export class Fp3dEditor extends LitElement {
   /** Front pictures of the pieces in the wall view, by type, size and turn (null: none to draw); asked for once. */
   private wallPics = new Map<string, { url: string; x0: number; x1: number; y0: number; y1: number } | null>();
   private wallPicsAsked = new Set<string>();
+  /** 3D printers' access data as the backend keeps it (never the code itself); null until asked. */
+  private declare _printerAccess: Record<string, { host: string; has_code: boolean; fingerprint: string }> | null;
+  /** The access form of the selected printer: what is typed, a certificate waiting for the user's trust, the last message. */
+  private declare _printerForm: { id: string; host: string; code: string; pending: string; msg: string; busy: boolean } | null;
   private declare _shiftX: number;
   /** Shift and turn take every floor with them (roof, outdoor areas, cables, hologram included). */
   private declare _shiftAll: boolean;
@@ -752,6 +758,8 @@ export class Fp3dEditor extends LitElement {
         return true;
       }
     })();
+    this._printerAccess = null;
+    this._printerForm = null;
     this._shiftX = 0;
     this._shiftAll = false;
     this._bgEdit = false;
@@ -12104,7 +12112,85 @@ export class Fp3dEditor extends LitElement {
       this.entitySelect(this.t(label), f[key] ?? null, undefined, options, (v) => this.updateFurniture({ [key]: pick(v) } as Partial<Furniture>));
     return html`${sel("printer_progress", "printer_progress", sensors)} ${sel("printer_remaining", "printer_remaining", sensors)} ${sel("printer_nozzle", "printer_nozzle", sensors)}
       ${sel("printer_bed", "printer_bed", sensors)} ${sel("printer_light", "printer_light", this.entityOptions((id) => /^(light|switch|input_boolean)\./.test(id)))}
-      <p class="fp3d-sub fp3d-wide">${this.t("printer_hint")}</p>`;
+      <p class="fp3d-sub fp3d-wide">${this.t("printer_hint")}</p>
+      <label class="fp3d-check fp3d-wide" title=${this.t("printer_model_hint")}
+        ><input type="checkbox" .checked=${!!f.printer_model} ?disabled=${!this.isAdmin} @change=${(ev: Event) => this.updateFurniture({ printer_model: (ev.target as HTMLInputElement).checked })} />
+        ${this.t("printer_model")}</label
+      >
+      ${f.printer_model
+        ? html`${this.entitySelect(this.t("printer_job"), f.printer_job ?? null, undefined, this.entityOptions((id) => /^(sensor|input_text|text)\./.test(id)), (v) => this.updateFurniture({ printer_job: v === "none" ? "none" : v }))}
+            <p class="fp3d-sub fp3d-wide">${this.t("printer_model_hint")}</p>
+            ${this.isAdmin ? this.renderPrinterAccess(f) : nothing}`
+        : nothing}`;
+  }
+
+  /** Where a printer's real part comes from: its address and LAN access code, and the certificate the user confirmed once. */
+  private renderPrinterAccess(f: Furniture) {
+    if (this._printerAccess === null) {
+      this._printerAccess = {};
+      void this.hass
+        .callWS<{ printers: Record<string, { host: string; has_code: boolean; fingerprint: string }> }>({ type: "neonplan3d/printer/access/get" })
+        .then((r) => (this._printerAccess = r.printers))
+        .catch(() => undefined);
+    }
+    const saved = this._printerAccess?.[f.id];
+    const form = this._printerForm?.id === f.id ? this._printerForm : { id: f.id, host: saved?.host ?? "", code: "", pending: "", msg: "", busy: false };
+    const set = (patch: Partial<NonNullable<typeof this._printerForm>>) => (this._printerForm = { ...form, ...patch });
+    const reason = (err: unknown): string => {
+      const text = String((err as { message?: string })?.message ?? err);
+      const known = ["not_set", "not_trusted", "certificate_changed", "login", "unreachable", "no_file", "too_big", "model", "ftp"];
+      return known.includes(text) ? this.t(`printer_err_${text}` as I18nKey) : text;
+    };
+    const short = (fp: string) => fp.match(/.{2}/g)?.slice(0, 8).join(":").toUpperCase() + "…";
+    const save = async (extra: { fingerprint?: string } = {}) => {
+      set({ busy: true, msg: "" });
+      try {
+        await this.hass.callWS({ type: "neonplan3d/printer/access/set", furniture_id: f.id, host: form.host.trim(), ...(form.code ? { code: form.code } : {}), ...extra });
+        const r = await this.hass.callWS<{ printers: Record<string, { host: string; has_code: boolean; fingerprint: string }> }>({ type: "neonplan3d/printer/access/get" });
+        this._printerAccess = r.printers;
+        set({ busy: false, code: "", pending: "", msg: "" });
+      } catch (err) {
+        set({ busy: false, msg: reason(err) });
+      }
+    };
+    const check = async () => {
+      set({ busy: true, msg: "" });
+      try {
+        const r = await this.hass.callWS<{ fingerprint: string }>({ type: "neonplan3d/printer/probe", host: form.host.trim() });
+        set({ busy: false, pending: r.fingerprint });
+      } catch (err) {
+        set({ busy: false, msg: reason(err) });
+      }
+    };
+    const test = async () => {
+      set({ busy: true, msg: "" });
+      try {
+        const r = await this.hass.callWS<{ name: string; triangles: number }>({ type: "neonplan3d/printer/model", furniture_id: f.id });
+        set({ busy: false, msg: this.t("printer_test_ok", { name: r.name.split("/").pop() ?? r.name, n: r.triangles }) });
+      } catch (err) {
+        set({ busy: false, msg: reason(err) });
+      }
+    };
+    return html`<label class="fp3d-field"
+        ><span>${this.t("printer_host")}</span
+        ><input type="text" inputmode="url" autocomplete="off" .value=${form.host} @input=${(e: Event) => set({ host: (e.target as HTMLInputElement).value })}
+      /></label>
+      <label class="fp3d-field"
+        ><span>${this.t("printer_code")}</span
+        ><input type="password" autocomplete="new-password" placeholder=${saved?.has_code ? this.t("printer_code_set") : ""} .value=${form.code} @input=${(e: Event) => set({ code: (e.target as HTMLInputElement).value })}
+      /></label>
+      <div class="fp3d-row fp3d-wide">
+        <button class="fp3d-btn" ?disabled=${form.busy} @click=${() => void save()}>${this.t("printer_access_save")}</button>
+        <button class="fp3d-btn" ?disabled=${form.busy || !saved?.host} @click=${() => void check()}>${this.t("printer_trust_check")}</button>
+        <button class="fp3d-btn" ?disabled=${form.busy || !saved?.fingerprint || !saved.has_code} @click=${() => void test()}>${this.t("printer_test")}</button>
+      </div>
+      ${form.pending
+        ? html`<p class="fp3d-sub fp3d-wide">${form.pending.match(/.{2}/g)?.join(":").toUpperCase()}</p>
+            <div class="fp3d-row fp3d-wide"><button class="fp3d-btn" ?disabled=${form.busy} @click=${() => void save({ fingerprint: form.pending })}>${this.t("printer_trust")}</button></div>`
+        : saved?.fingerprint
+          ? html`<p class="fp3d-sub fp3d-wide">${this.t("printer_trusted", { fp: short(saved.fingerprint) })}</p>`
+          : nothing}
+      ${form.msg ? html`<p class="fp3d-sub fp3d-wide" role="status">${form.msg}</p>` : nothing}`;
   }
 
   /** A built-in fireplace: how tall the fire opening is and how high above the floor it starts. */

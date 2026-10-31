@@ -27,6 +27,7 @@ from .diagnostics_report import DiagnosticsError, DiagnosticsReporter
 from .locate.recorder import ws_locate_rec
 from .locate.ws import COMMANDS as LOCATE_COMMANDS
 from .packs import MAX_PACK_SIZE, PackError, module_sha, parts_of, verify_pack
+from .printer_ws import async_printer_commands
 from .schema import BUILDING_SCHEMA, IMAGE_DATA
 from .storage import FloorplanData, complete
 from .timetravel import ws_timetravel_history
@@ -73,7 +74,7 @@ def async_register_commands(hass: HomeAssistant) -> None:
         ws_locate_rec,
     ):
         websocket_api.async_register_command(hass, command)
-    for command in LOCATE_COMMANDS:
+    for command in (*LOCATE_COMMANDS, *async_printer_commands()):
         websocket_api.async_register_command(hass, command)
 
 

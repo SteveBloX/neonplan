@@ -24,11 +24,19 @@ const WARM = 0xffe9b8;
 /** Height of the bed above the item's floor (the frame's base is 8 cm). */
 const BED_Y = 0.115;
 
+/** Where the printed part starts: the top of the bed plate. */
+export const PRINTER_BED_TOP = BED_Y + 0.012;
+
+/** How much of the part is built: 0 … 1 (the progress; without one a printing printer builds and starts again). */
+export function printGrown(s: PrinterState, time: number): number {
+  return s.phase === "done" ? 1 : s.progress !== null ? s.progress : s.phase === "printing" ? (time * 0.05) % 1 : 0;
+}
+
 /**
  * `time` in seconds drives the movement; `s` is what the printer says. Only a printing printer moves: a paused one stands
  * still with its part, a finished one shows its whole part.
  */
-export function pushPrinter(buf: GeoBuffer, f: Pick<Furniture, "x" | "z" | "rotation" | "w" | "d" | "h" | "mirror">, base: number, s: PrinterState, time: number): void {
+export function pushPrinter(buf: GeoBuffer, f: Pick<Furniture, "x" | "z" | "rotation" | "w" | "d" | "h" | "mirror">, base: number, s: PrinterState, time: number, model?: { height: number }): void {
   const a = f.rotation * DEG;
   const cos = Math.cos(a);
   const sin = Math.sin(a);
@@ -65,10 +73,11 @@ export function pushPrinter(buf: GeoBuffer, f: Pick<Furniture, "x" | "z" | "rota
   // the bed, and the part on it: it grows with the progress (without one it grows and starts again), whole when done
   box(-inner, inner, BED_Y, BED_Y + 0.012, -inner + bedZ, inner + bedZ, PLATE, 0x3b4f80);
   const room = h - BED_Y - 0.1;
-  const grown = s.phase === "done" ? 1 : s.progress !== null ? s.progress : printing ? (time * 0.05) % 1 : 0;
-  const objH = Math.max(0, room * 0.82 * grown);
+  const grown = printGrown(s, time);
+  // the real part (drawn by the viewer as a mesh of its own) replaces the stand-in block; the head rides on its top
+  const objH = Math.max(0, model ? model.height * grown : room * 0.82 * grown);
   const objW = inner * 0.5;
-  if (objH > 0.004) box(-objW / 2, objW / 2, BED_Y + 0.012, BED_Y + 0.012 + objH, -objW / 2 + bedZ, objW / 2 + bedZ, FILAMENT, FILAMENT_TOP);
+  if (!model && objH > 0.004) box(-objW / 2, objW / 2, BED_Y + 0.012, BED_Y + 0.012 + objH, -objW / 2 + bedZ, objW / 2 + bedZ, FILAMENT, FILAMENT_TOP);
 
   // the head on its rail at the part's top, sliding across while it prints
   const headY = BED_Y + 0.012 + objH + 0.035;

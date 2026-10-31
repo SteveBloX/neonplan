@@ -1,1 +1,929 @@
-function ee(t){let a=o=>{let u=new t.BufferGeometry;u.setAttribute("position",new t.Float32BufferAttribute(o,3));let n=1/0,l=-1/0;for(let f=1;f<o.length;f+=3)n=Math.min(n,o[f]),l=Math.max(l,o[f]);let b=[];for(let f=0;f<o.length;f+=3){let y=.66+.34*(l>n?(o[f+1]-n)/(l-n):1);b.push(y,y,y)}return u.setAttribute("color",new t.Float32BufferAttribute(b,3)),u.computeBoundingSphere(),u},i=(o,u)=>{let n=[];for(let l=0;l<o.length-1;l++){let[b,f]=o[l],[R,y]=o[l+1];for(let g=0;g<u;g++){let _=g/u*Math.PI*2,k=(g+1)/u*Math.PI*2,P=(M,O,T)=>[Math.cos(T)*M,O,Math.sin(T)*M];n.push(...P(b,f,_),...P(R,y,_),...P(R,y,k),...P(b,f,_),...P(R,y,k),...P(b,f,k))}}return a(n)};return{ball:(o=>i(Array.from({length:o/2+1},(u,n)=>[Math.sin(n/(o/2)*Math.PI)*.5,-Math.cos(n/(o/2)*Math.PI)*.5]),o))(14),cylinder:(o,u,n,l=8)=>i([[0,-n/2],[u,-n/2],[o,n/2],[0,n/2]],l),cone:(o,u,n=8)=>i([[0,-u/2],[o,-u/2],[0,u/2]],n)}}var Z={orange:["#e0954a","#fbe6cf"],tabby:["#a8865d","#e8d6bb"],black:["#2c2c33","#5a5a66"],white:["#f1f1f4","#e6e1e4"],grey:["#9097a3","#d9dce2"],brown:["#7d5536","#d4a97c"],calico:["#f4f0e8","#e09045"],golden:["#e3b46b","#f7e3bd"],cream:["#efe0c4","#fff6e6"]},$={cat:{len:.32,wid:.17,hi:.16,leg:.09,head:.115,snout:0,ears:"cat",tail:"cat",speed:.55},rabbit:{len:.27,wid:.19,hi:.17,leg:.04,head:.09,snout:0,ears:"bunny",tail:"pom",speed:.6},dachshund:{len:.48,wid:.14,hi:.14,leg:.07,head:.105,snout:.08,ears:"floppy",tail:"dog",speed:.7},pug:{len:.3,wid:.21,hi:.18,leg:.1,head:.13,snout:.02,ears:"floppy",tail:"curl",speed:.55},terrier:{len:.32,wid:.16,hi:.16,leg:.13,head:.11,snout:.06,ears:"pointy",tail:"dog",speed:.8},labrador:{len:.56,wid:.23,hi:.23,leg:.24,head:.14,snout:.09,ears:"floppy",tail:"dog",speed:.85},shepherd:{len:.62,wid:.23,hi:.25,leg:.3,head:.14,snout:.11,ears:"pointy",tail:"bushy",speed:.9}},te=t=>t.kind==="dog"?$[t.breed??"labrador"]??$.labrador:$[t.kind];function ie(t,a){let i=ee(t),r=te(a),[o,u]=Z[a.fur]??Z.orange,n=new t.MeshBasicMaterial({color:o,vertexColors:!0}),l=new t.MeshBasicMaterial({color:u,vertexColors:!0}),b=new t.MeshBasicMaterial({color:new t.Color(o).multiplyScalar(.78),vertexColors:!0}),f=new t.MeshBasicMaterial({color:new t.Color(o).lerp(new t.Color(u),.6),vertexColors:!0}),R=new t.MeshBasicMaterial({color:"#16161c"}),y=new t.MeshBasicMaterial({color:"#ffffff"}),g=new t.MeshBasicMaterial({color:a.kind==="dog"?"#1d1d22":"#f08aa0"}),_=(e,d,s,p,m=0,h=0,v=0)=>{let w=new t.Mesh(i.ball,e);return w.scale.set(d,s,p),w.position.set(m,h,v),w},k=new t.Group,P=new t.Group;k.add(P);let M=r.leg+r.hi/2;P.add(_(n,r.wid,r.hi,r.len,0,M,0),_(l,r.wid*.78,r.hi*.72,r.len*.55,0,M-r.hi*.12,r.len*.16));let O=[],T=Math.min(.04,r.wid*.17);for(let[e,d]of[[-1,1],[1,1],[-1,-1],[1,-1]]){let s=new t.Group,p=r.leg+r.hi*.25;s.position.set(e*r.wid*.27,p,d*r.len*.3);let m=new t.Mesh(i.cylinder(T*.9,T,p,8),n);m.position.y=-p/2,s.add(m,_(f,T*2.3,T*1.4,T*2.6,0,-p+T*.6,T*.3)),P.add(s),O.push(s)}let S=new t.Group,c=r.head;S.position.set(0,r.leg+r.hi*.9+c*.45,r.len/2+c*.45),S.add(_(n,c*2.15,c*1.95,c*1.95));let D=Math.max(.025,r.snout);S.add(_(l,c*1.05,c*.8,D*1.6+c*.5,0,-c*.32,c*.72+D*.45)),S.add(_(g,c*.28,c*.2,c*.2,0,-c*.12,c*.95+D*1.1));let A=[];for(let e of[-1,1]){let d=new t.Group;if(d.position.set(e*c*.42,c*.12,c*.82),d.add(_(R,c*.34,c*.38,c*.2),_(y,c*.11,c*.11,c*.08,e*-c*.05,c*.08,c*.08)),S.add(d),A.push(d),r.ears==="cat"){let s=new t.Mesh(i.cone(c*.4,c*.75,4),n);s.position.set(e*c*.55,c*.88,-c*.05),s.rotation.set(0,Math.PI/4,e*-.35);let p=new t.Mesh(i.cone(c*.22,c*.45,4),g);p.position.set(e*c*.53,c*.84,c*.06),p.rotation.set(0,Math.PI/4,e*-.35),S.add(s,p)}else if(r.ears==="bunny"){let s=_(n,c*.5,c*2.2,c*.3,e*c*.35,c*1.6,-c*.15);s.rotation.z=e*-.18;let p=_(g,c*.26,c*1.6,c*.1,e*c*.35,c*1.6,-c*.02);p.rotation.z=e*-.18,S.add(s,p)}else if(r.ears==="floppy"){let s=_(b,c*.35,c*1.1,c*.75,e*c*.98,-c*.15,-c*.05);s.rotation.z=e*.25,S.add(s)}else{let s=new t.Mesh(i.cone(c*.32,c*.95,6),n);s.position.set(e*c*.5,c*1,-c*.1),s.rotation.z=e*-.2,S.add(s)}}P.add(S);let E=new t.Group;if(E.position.set(0,r.leg+r.hi*.7,-r.len/2+.01),r.tail==="pom")E.add(_(l,.08,.08,.08));else if(r.tail==="curl")E.add(_(n,.07,.07,.06,0,.03,-.01));else{let e=r.tail==="cat"?.28:r.tail==="bushy"?.26:.18,d=r.tail==="bushy"?.045:r.tail==="cat"?.024:.022;if(r.tail==="bushy")E.add(_(n,d*2,e,d*2,0,e/2,0));else{let s=new t.Mesh(i.cylinder(d*.75,d,e,8),n);s.position.y=e/2,E.add(s)}r.tail==="cat"&&E.add(_(n,d*1.8,d*1.8,d*1.8,0,e,0))}P.add(E);let C=document.createElement("canvas");C.width=128,C.height=64;let L=C.getContext("2d");L.fillStyle="#cfe9ff",L.font="bold 40px system-ui, sans-serif",L.fillText("z",20,52),L.font="bold 54px system-ui, sans-serif",L.fillText("Z",58,46);let V=new t.Mesh(new t.PlaneGeometry(.3,.15),new t.MeshBasicMaterial({map:new t.CanvasTexture(C),transparent:!0,depthWrite:!1,side:t.DoubleSide}));return V.rotation.x=-.7,V.position.set(0,r.hi+c*2+.12,0),V.visible=!1,k.add(V),{root:k,body:P,legs:O,tail:E,head:S,eyes:A,zzz:V}}var U=t=>t.slice(t.lastIndexOf(":")+1).toLowerCase(),le=/^(sofa|armchair|chesterfield|corner_(left|right|sofa))|sofa/,J=/^bed(_|$)/,se=/^(cat_bed|cat_cave|cat_tree)$/,ae=/^(dog_bed|dog_basket|dog_house)$/,ue=/^(bowls|pet_feeder|water_fountain)$/;function ce(t,a){return t.furniture.filter(i=>i.h>=.25&&a(t,i)<.3&&!/lamp|light|leuchte|rug|carpet|teppich|(^|_)mat($|_)|parking|stellplatz/.test(U(i.type))).map(i=>{let r=i.rotation*Math.PI/180;return{c:[i.x,i.z],u:[Math.cos(r),Math.sin(r)],hw:i.w/2,hd:i.d/2}})}function pe(t){return t.furniture.filter(a=>/rug|carpet|teppich|(^|_)mat($|_)/.test(U(a.type))&&a.h<=.06).map(a=>({x:a.x,z:a.z,hw:a.w/2,hd:a.d/2,a:a.rotation*Math.PI/180,top:a.h+.006}))}function me(t,a){let i=0;for(let r of t){let o=a[0]-r.x,u=a[1]-r.z,n=o*Math.cos(r.a)+u*Math.sin(r.a),l=-o*Math.sin(r.a)+u*Math.cos(r.a);Math.abs(n)<=r.hw&&Math.abs(l)<=r.hd&&(i=Math.max(i,r.top))}return i}function de(t,a){let i=!1;for(let r=0,o=a.length-1;r<a.length;o=r++){let[u,n]=a[r],[l,b]=a[o];n>t[1]!=b>t[1]&&t[0]<(l-u)*(t[1]-n)/(b-n)+u&&(i=!i)}return i}function he(t,a,i){let r=[],o=(n,l)=>{let b=n.rotation*Math.PI/180;return[n.x-Math.sin(b)*l,n.z+Math.cos(b)*l]},u=n=>{let[l,b]=o(n,1);return Math.atan2(l-n.x,b-n.z)};for(let n of t.furniture){let l=U(n.type);if(a==="cat"?se.test(l):a==="dog"?ae.test(l):!1){let f=l==="cat_tree"||l==="dog_house"?o(n,n.d/2+.3):[n.x,n.z];r.push({p:f,y:l==="cat_tree"||l==="dog_house"?0:.06,approach:null,face:u(n),sleep:!0})}else if(ue.test(l)&&a!=="rabbit")r.push({p:o(n,n.d/2+.25),y:0,approach:null,face:u(n)+Math.PI,sleep:!1,visit:!0});else if((le.test(l)||J.test(l))&&!l.includes("bunk")&&!l.startsWith("dog")&&!l.startsWith("cat")){let f=J.test(l)||l==="sofa_bed",R=k=>{let P=o(n,k*(n.d/2+.35));return!i.blocked(P)&&!!i.roomAt(P)},y=1;if(!R(1)&&R(-1))y=-1;else if(R(1)===R(-1)){let k=t.rooms.find(P=>P.points.length>=3&&P.points.length&&de([n.x,n.z],P.points));if(k){let P=k.points.reduce((T,S)=>T+S[0],0)/k.points.length,M=k.points.reduce((T,S)=>T+S[1],0)/k.points.length,O=T=>{let S=o(n,T);return Math.hypot(S[0]-P,S[1]-M)};O(-1)<O(1)&&(y=-1)}}let g=o(n,y*(n.d/2+.35)),_=u(n)+(y<0?Math.PI:0);if(a==="cat"){let k=f?Math.min(.58,n.h*.64):Math.min(.5,n.h*.58);r.push({p:o(n,f?0:y*n.d*.12),y:k,approach:g,face:_,sleep:f})}else r.push({p:o(n,y*(n.d/2+(a==="dog"?.5:.35))),y:0,approach:null,face:_+(a==="dog"?Math.PI/2:0),sleep:f})}else l==="rug"&&r.push({p:[n.x,n.z],y:0,approach:null,face:null,sleep:!1})}return r}function fe(t,a,i){if(t==="stairs_u"){let o=(a-Math.min(.12,a*.06))/2,u=Math.min(o,i*.45),n=-a/2+o/2,l=a/2-o/2,b=-i/2+u/2;return[[n,i/2+.35,0],[n,i/2,0],[n,b,.5],[l,b,.5],[l,i/2-.15,1],[l,i/2+.35,1]]}if(t==="u_shape"||t==="u_open_winder")return[[.6,1.5+.35,0],[.6,1.5,0],[.6,-1.05,.5],[-.6,-1.05,.5],[-.6,1.4,1],[-.6,1.4+.35,1]];if(t==="l_shape")return[[.6,1.3+.35,0],[.6,1.3,0],[.6,-.8,.5],[.1,-.8,.5],[-1.1,-.8,1],[-1.1-.35,-.8,1]];if(t==="spiral"){let o=[];for(let l=0;l<=12;l++){let b=(-90+l*300/12)*Math.PI/180;o.push([Math.cos(b)*.45,Math.sin(b)*.45,l/12])}let u=-90*Math.PI/180,n=210*Math.PI/180;return[[Math.cos(u)*1,Math.sin(u)*1,0],...o,[Math.cos(n)*1,Math.sin(n)*1,1]]}if(t==="winder_bottom"){let o=i/2-a,u=[.25,.5,.75].map(n=>{let l=n*Math.PI/2;return[a/2-Math.sin(l)*(a/2),o+Math.cos(l)*(a/2),n*3/14]});return[[a/2+.35,o+a/2,0],[a/2,o+a/2,0],...u,[0,o,3/14],[0,-i/2,1],[0,-i/2-.35,1]]}if(t==="corner_bottom"){let o=-a/2+.5,u=i/2-.5;return[[a/2+.35,u,0],[a/2,u,0],[o+.3,u,3/14],[o,u,4/14],[o,i/2-1,4/14],[o,-i/2,1],[o,-i/2-.35,1]]}return t==="stairs"||t==="straight"||t==="straight_open"||t==="floating"||t==="space_saver"?[[0,i/2+.35,0],[0,i/2,0],[0,-i/2,1],[0,-i/2-.35,1]]:null}function ge(t){let a=t.floors.filter(r=>r.rooms.some(o=>o.points.length>=3)).sort((r,o)=>r.elevation-o.elevation),i=[];for(let r=0;r<a.length-1;r++){let o=a[r],u=a[r+1],n=u.elevation-o.elevation;for(let l of o.furniture){let b=fe(U(l.type),l.w,l.d);if(!b)continue;let f=l.rotation*Math.PI/180,R=l.mirror?-1:1,y=(M,O)=>[l.x+M*R*Math.cos(f)-O*Math.sin(f),l.z+M*R*Math.sin(f)+O*Math.cos(f)],g=b.map(([M,O,T])=>{let[S,c]=y(M,O);return[S,T*n,c]}),_=b[1][1],k=b[b.length-2][1],P=l.w/2+.35;i.push({lower:o.id,upper:u.id,pts:g.slice(1,-1),foot:[[g[0][0],g[0][2]],...[0,-.35,-.7].flatMap(M=>[y(-P,_+M),y(P,_+M)])],top:[[g[g.length-1][0],g[g.length-1][2]],...[0,.35,.7].flatMap(M=>[y(-P,k+M),y(P,k+M)])]})}}return i}var be={aquarium:{w:.78/.8,d:.33/.35,y0:.08/.5,y1:.4/.5,fish:4},aquarium_large:{w:1.18/1.2,d:.43/.45,y0:.84/1.4,y1:1.24/1.4,fish:7}},X=["#ff8c3a","#ffd23f","#3fe0ff","#ff5d8f","#9b7bff","#7dff9b","#ff6a3d"],H=(t,a)=>t+Math.random()*(a-t),Q=(t,a)=>{let i=a-t;for(;i>Math.PI;)i-=2*Math.PI;for(;i<-Math.PI;)i+=2*Math.PI;return i};function _e(t){let{lib:a,viewer:i}=t,r=[],o=0,u,n=0,l=[],b=[],f=[],R,y=new Map,g=t.building,_=e=>{let d=y.get(e);if(!d){let s=g.floors.find(h=>h.id===e),p=t.closedDoors?.()??new Set,m=p.size?{...s,openings:s.openings.filter(h=>!p.has(h.id))}:s;d={floor:s,map:new t.FloorMap(g,m,ce(s,t.base)),rooms:s.rooms.filter(h=>h.points.length>=3),spots:new Map,rugs:pe(s)},y.set(e,d)}return d},k=(e,d)=>{let s=_(d);e.floorId=d,e.map=s.map,e.rooms=s.rooms;let p=s.spots.get(e.pet.kind);p||s.spots.set(e.pet.kind,p=he(s.floor,e.pet.kind,s.map)),e.spots=p,i.floorMap.get(d)?.group.add(e.model.root)},P=(e,d)=>{let s=e.floors.filter(p=>p.rooms.some(m=>m.points.length>=3));return s.find(p=>p.id===d.floor_id)??[...s].sort((p,m)=>Math.abs(p.elevation)-Math.abs(m.elevation))[0]},M=e=>{let d=e.rooms[Math.floor(Math.random()*e.rooms.length)],s=d.points.map(m=>m[0]),p=d.points.map(m=>m[1]);for(let m=0;m<12;m++){let h=[H(Math.min(...s)+.4,Math.max(...s)-.4),H(Math.min(...p)+.4,Math.max(...p)-.4)];if(e.map.roomAt(h)&&!e.map.blocked(h))return h}return e.map.freeNear([(Math.min(...s)+Math.max(...s))/2,(Math.min(...p)+Math.max(...p))/2])},O="",T=()=>{let e=[...t.closedDoors?.()??[]].sort().join(",");if(e!==O){O=e,y=new Map;for(let d of r)d.climb||k(d,d.floorId)}},S=(e,d)=>{T();let s=t.night(),p=e.spots.filter(w=>w.sleep),m=s&&p.length?p:e.spots,h=e.on?.approach??e.pos,v=l.filter(w=>w.lower===e.floorId||w.upper===e.floorId);if(v.length&&!s&&Math.random()<.22){let w=v[Math.floor(Math.random()*v.length)],F=w.lower===e.floorId,x=null,I=null;for(let z of F?w.foot:w.top)if(!(e.map.blocked(z)||!e.map.roomAt(z))&&(x=e.map.path(h,z),x)){I=z;break}if(x&&I){e.stairsEntry=I,e.path=x,e.goal=null,e.stairs={link:w,up:F},e.mode="walk",e.on?.approach&&e.y>.05&&(e.jump={from:[e.pos[0],e.y,e.pos[1]],to:[e.on.approach[0],0,e.on.approach[1]],t:0,then:"walk"}),e.on=null;return}}for(let w=0;w<6;w++){let F=m.length&&(s||Math.random()<.45)?m[Math.floor(Math.random()*m.length)]:null;if(F&&(F===e.on||F===e.last&&m.length>1&&!s))continue;let x=F?F.approach??F.p:M(e),I=e.map.blocked(x)?e.map.freeNear(x):x,z=Math.hypot(I[0]-h[0],I[1]-h[1])<.05?[]:e.map.path(h,I);if(z){e.path=z,e.goal=F,F&&(e.last=F),e.stairs=null,e.mode="walk",e.on?.approach&&e.y>.05&&(e.jump={from:[e.pos[0],e.y,e.pos[1]],to:[e.on.approach[0],0,e.on.approach[1]],t:0,then:"walk"}),e.on=null;return}}e.mode=s?"sleep":"rest",e.until=d+H(20,60)*1e3},c=e=>{let d=e.look,s=(e.mode==="rest"||e.mode==="sleep")&&!e.jump,p=!e.climb&&!e.jump&&e.y<.05?me(y.get(e.floorId)?.rugs??[],e.pos):0;e.model.root.position.set(e.pos[0],e.y+p,e.pos[1]),e.model.root.rotation.y=e.heading;let m=(e.mode==="walk"||e.mode==="climb")&&!e.jump,h=m?Math.sin(e.phase):0;e.model.legs.forEach((w,F)=>{w.rotation.x=s?0:(F===0||F===3?h:-h)*.6,w.scale.y=s?.08:1});let v=e.pet.kind==="rabbit"&&m?Math.abs(Math.sin(e.phase))*.07:0;e.model.body.position.y=(s?-(d.leg+d.hi*.12):0)+v,e.model.head.rotation.x=e.mode==="sleep"?.45:e.mode==="stand"?.5:s?.12:Math.sin(e.phase*2)*.04,s?e.model.tail.rotation.set(-1.45,0,.9):e.model.tail.rotation.set(d.tail==="cat"?-.5:-.9,0,Math.sin(e.phase*.7)*(m?.6:.2));for(let w of e.model.eyes)w.scale.y=e.mode==="sleep"?.12:1;e.model.zzz.visible=e.mode==="sleep"},D=(e,d)=>{if(e.stairs){let{link:m,up:h}=e.stairs;e.stairs=null;let v=_(h?m.upper:m.lower).map,w=h?m.top:m.foot,F=w.find(N=>!v.blocked(N)&&v.roomAt(N))??v.freeNear(w[0]),x=m.pts[m.pts.length-1][1],z=[...h?m.pts:[...m.pts].reverse(),[F[0],h?x:0,F[1]]],B=e.stairsEntry??e.pos;h||k(e,m.lower),e.pos=[B[0],B[1]],e.y=h?0:x,e.climb={pts:z,to:h?m.upper:m.lower},e.mode="climb";return}let s=e.goal;if(e.goal=null,s?.visit){e.mode="stand",e.until=d+H(4,9)*1e3,s.face!=null&&(e.heading=s.face);return}let p=t.night()?"sleep":"rest";e.until=d+(p==="sleep"?H(120,400):e.pet.kind==="cat"?H(30,120):H(15,60))*1e3,e.on=s,s&&s.y>.05&&s.approach?e.jump={from:[e.pos[0],e.y,e.pos[1]],to:[s.p[0],s.y,s.p[1]],t:0,then:p}:(s&&(e.pos=s.p,e.y=s.y),s?.face!=null&&(e.heading=s.face),e.mode=p)},A=(e,d,s)=>{if(e.jump){let x=e.jump;x.t=Math.min(1,x.t+d/.45);let I=x.t;e.pos=[x.from[0]+(x.to[0]-x.from[0])*I,x.from[2]+(x.to[2]-x.from[2])*I],e.y=x.from[1]+(x.to[1]-x.from[1])*I+Math.sin(I*Math.PI)*.22;let z=x.to[0]-x.from[0],B=x.to[2]-x.from[2];return Math.hypot(z,B)>.02&&(e.heading=Math.atan2(z,B)),I>=1&&(e.y=x.to[1],e.jump=null,e.mode=x.then,x.then!=="walk"&&e.on?.face!=null&&(e.heading=e.on.face)),c(e),!0}if(e.mode==="climb"&&e.climb){let x=e.climb,I=x.pts[0];if(!I)return e.climb=null,e.y=0,x.to!==e.floorId&&k(e,x.to),e.mode="rest",e.until=s+H(1,3)*1e3,c(e),!0;let z=I[0]-e.pos[0],B=I[2]-e.pos[1],N=I[1]-e.y,G=Math.hypot(z,N,B);Math.hypot(z,B)>.02&&(e.heading+=Q(e.heading,Math.atan2(z,B))*Math.min(1,d*8));let W=Math.min(G,e.look.speed*.95*d);return G<.02?x.pts.shift():(e.pos=[e.pos[0]+z/G*W,e.pos[1]+B/G*W],e.y+=N/G*W,e.phase+=d*e.look.speed*22),c(e),!0}if(e.mode!=="walk")return s<e.until?!1:(S(e,s),c(e),e.mode==="walk");let p=e.path[0];if(!p)return D(e,s),c(e),!0;let m=p[0]-e.pos[0],h=p[1]-e.pos[1],v=Math.hypot(m,h),w=Q(e.heading,Math.atan2(m,h));e.heading+=Math.sign(w)*Math.min(Math.abs(w),d*6);let F=Math.min(v,e.look.speed*d);return v<.02?e.path.shift():(e.pos=[e.pos[0]+m/v*F,e.pos[1]+h/v*F],e.phase+=d*e.look.speed*20),c(e),!0},E=e=>{if(o=0,i.resting){n=0,u=setTimeout(()=>o=requestAnimationFrame(E),1e3);return}let d=n?Math.min(i.low?.3:.1,(e-n)/1e3):0;n=e;let s=!1;for(let p of r)A(p,d,e)&&(s=!0);if(s&&i.animate(),s&&i.low)u=setTimeout(()=>o=requestAnimationFrame(E),180);else if(s)o=requestAnimationFrame(E);else{let p=Math.max(500,Math.min(...r.map(m=>m.until-performance.now()),6e4));n=0,u=setTimeout(()=>o=requestAnimationFrame(E),p)}},C=e=>{let d=ee(a);for(let p of e.floors){let m=i.floorMap.get(p.id);if(m)for(let h of p.furniture){let v=be[U(h.type)];if(!v)continue;let w=new a.Group;w.position.set(h.x,t.base(p,h),h.z),w.rotation.y=-h.rotation*Math.PI/180;let F=h.w*v.w/2,x=h.h*v.y0,I=h.h*v.y1;for(let z=0;z<v.fish;z++){let B=X[(z*3+Math.round(h.x*7))%X.length],N=new a.MeshBasicMaterial({color:B,vertexColors:!0}),G=.035+z*37%10/400;for(let W of[1,-1]){let j=new a.Group,q=new a.Mesh(d.ball,N);q.scale.set(G*1.8,G,.004);let K=new a.Mesh(d.ball,N);K.scale.set(G*.7,G*.9,.004),K.position.x=-G*1.15,j.add(q,K),j.position.z=W*(h.d*v.d/2+.004),w.add(j),f.push({g:j,y:x+(z+.5)/v.fish*(I-x),amp:F-G*2,speed:.25+z*53%10/30,phase:z*1.7+(W>0?0:.6)})}}m.group.add(w),b.push(w)}}let s=()=>{if(document.hidden||i.resting)return;let p=performance.now()/1e3;for(let m of f){let h=Math.sin(p*m.speed+m.phase);m.g.position.x=m.amp*h,m.g.position.y=m.y+Math.sin(p*m.speed*2.3+m.phase)*.012,m.g.scale.x=Math.cos(p*m.speed+m.phase)>=0?1:-1}i.animate()};f.length&&(s(),R=setInterval(s,160))},L=()=>{cancelAnimationFrame(o),clearTimeout(u),clearInterval(R);for(let e of r)e.model.root.removeFromParent();for(let e of b)e.removeFromParent();r=[],b=[],f=[]},V=(e,d)=>{let s=new Map(r.map(p=>[p.pet.id,p]));L(),g=e,y=new Map,l=ge(e);for(let p of d){let m=s.get(p.id),h=(m&&m.pet.floor_id===p.floor_id?e.floors.find(F=>F.id===m.floorId):void 0)??P(e,p);if(!h||!i.floorMap.get(h.id)||!_(h.id).rooms.length)continue;let v=m,w={pet:p,look:te(p),model:ie(a,p),floorId:h.id,map:_(h.id).map,spots:[],rooms:[],pos:[0,0],y:0,heading:v?.heading??H(0,Math.PI*2),path:[],goal:null,on:null,mode:"rest",until:0,phase:0,jump:null,stairs:null,stairsEntry:null,climb:null};k(w,h.id),w.pos=v&&v.floorId===h.id&&!v.climb?v.on?.approach??v.pos:M(w),c(w),r.push(w)}C(e),n=0,i.invalidate(),r.length&&(o=requestAnimationFrame(E))};return V(t.building,t.pets),{update:V,dispose:L}}var we={type:"none",pitch:35,overhang:.4},Ne={wall_exterior:.24,wall_interior:.12,grid:.05,north:0,roof:{...we}};var xe=new Set(["lamp_ceiling","lamp_fan","lamp_downlight","lamp_spot","lamp_panel","lamp_pendant","lamp_floor","lamp_uplight","lamp_table","lamp_wall","led_strip","lamp_bollard","lamp_garden"]);var ye=new Set([...xe,"radiator","towel_radiator","range_hood","microwave","coffee_machine","nest_hub","ac_unit","awning","gate","fireplace","printer_3d","robot_vacuum","inverter","home_battery","wallbox","meter","pool_pump","pool_heat_pump","pool_dosing","tv_board","tv_wall","desk","fridge","fridge_smart","stove","oven","kitchen_tall","dishwasher","washer","dryer","kitchen","island","sink"]);function Me(t){let a=0;for(let i=0;i<t.length;i++){let[r,o]=t[i],[u,n]=t[(i+1)%t.length];a+=r*n-u*o}return a/2}function ne(t){let a=Me(t);if(Math.abs(a)<1e-9){let o=t.length||1;return[t.reduce((u,n)=>u+n[0],0)/o,t.reduce((u,n)=>u+n[1],0)/o]}let i=0,r=0;for(let o=0;o<t.length;o++){let[u,n]=t[o],[l,b]=t[(o+1)%t.length],f=u*b-l*n;i+=(u+l)*f,r+=(n+b)*f}return[i/(6*a),r/(6*a)]}var ke=.9,re=2,ve=.2+.32*re,oe=.8;function Y(t,a,i,r=0){let o=[],u=(l,b,f,R)=>[Math.cos(f)*l,b+(R===0?Math.sin(f*6)*r:0),Math.sin(f)*l];for(let l=0;l<a.length-1;l++){let[b,f]=a[l],[R,y]=a[l+1];for(let g=0;g<i;g++){let _=g/i*Math.PI*2,k=(g+1)/i*Math.PI*2;o.push(...u(b,f,_,l),...u(R,y,_,l+1),...u(R,y,k,l+1),...u(b,f,_,l),...u(R,y,k,l+1),...u(b,f,k,l))}}let n=new t.BufferGeometry;return n.setAttribute("position",new t.Float32BufferAttribute(o,3)),n}function Ee(t){let a=new t.Group,i=[[.24,-.32],[.22,-.1],[.2,.08]];for(let g=1;g<=6;g++){let _=g/6*(Math.PI/2);i.push([Math.cos(_)*.2,.08+Math.sin(_)*.2])}let r=new t.MeshBasicMaterial({color:new t.Color("#eef6ff"),transparent:!0,opacity:0,depthWrite:!1,side:t.DoubleSide}),o=new t.Mesh(Y(t,i,18,.035),r),u=new t.MeshBasicMaterial({color:new t.Color("#7fe8ff"),transparent:!0,opacity:0,depthWrite:!1,side:t.DoubleSide}),n=new t.Mesh(Y(t,i.map(([g,_])=>[g*1.25+.02,_*1.12]),14,.04),u),l=new t.MeshBasicMaterial({color:new t.Color("#141826"),transparent:!0,opacity:0,depthWrite:!1}),b=Y(t,[[0,-.03],[.022,-.02],[.026,0],[.022,.02],[0,.03]],8),f=[];for(let g of[-.07,.07]){let _=new t.Mesh(b,l);_.position.set(g,.17,.18),_.scale.set(1,1.25,.5),f.push(_)}let R=new t.Mesh(b,l);R.position.set(0,.08,.2),R.scale.set(.9,.8,.5),f.push(R);let y=Y(t,[[0,-.05],[.035,-.03],[.04,.02],[0,.05]],8);for(let g of[-.22,.22]){let _=new t.Mesh(y,r);_.position.set(g,0,.03),_.rotation.z=g<0?.9:-.9,a.add(_)}a.add(n,o,...f);for(let g of[r,u,l])g.depthTest=!1;n.renderOrder=20,o.renderOrder=21;for(let g of f)g.renderOrder=22;return a.scale.setScalar(re),a.visible=!1,{root:a,mats:[r,u,l],opacity:[.82,.18,.9]}}function Pe(t){let{lib:a,viewer:i}=t,r=t.building,o=Ee(a),u=null,n=0,l,b=!1,f=(y=!1)=>{if(clearTimeout(l),b)return;let g=t.night(),_=y?6+Math.random()*8:g?25+Math.random()*35:70+Math.random()*80;l=setTimeout(R,_*1e3)};function R(){if(b)return;let y=[...i.floorMap.values()].filter(A=>A.group.visible&&A.floor.rooms.some(E=>E.points.length>=3)),g=y[Math.floor(Math.random()*y.length)];if(!g)return f();let k=(r.floors.find(A=>A.id===g.floor.id)??g.floor).rooms.filter(A=>A.points.length>=3),M=Array.from({length:Math.min(4,Math.max(2,k.length))},()=>ne(k[Math.floor(Math.random()*k.length)].points)).map(([A,E])=>[A+(Math.random()-.5)*.8,E+(Math.random()-.5)*.8]);(M.length<2||Math.hypot(M[1][0]-M[0][0],M[1][1]-M[0][1])<.5)&&M.push([M[0][0]+2,M[0][1]+1.5]);let O=M.slice(1).map((A,E)=>Math.hypot(A[0]-M[E][0],A[1]-M[E][1])),T=O.reduce((A,E)=>A+E,0),S=Math.max(6,T/ke);u?.remove(o.root),u=g.group,u.add(o.root),o.root.visible=!0;let c=performance.now(),D=A=>{if(b)return;let E=(A-c)/1e3;if(E>=S||!g.group.visible)return o.root.visible=!1,i.invalidate(),f(E<S);let C=E/S*T,L=0;for(;L<O.length-1&&C>O[L];)C-=O[L++];let V=O[L]?Math.min(1,C/O[L]):1,e=M[L],d=M[L+1]??e,s=e[0]+(d[0]-e[0])*V,p=e[1]+(d[1]-e[1])*V;o.root.position.set(s,ve+Math.sin(E*2.2)*.08,p),o.root.rotation.y=Math.atan2(d[0]-e[0],d[1]-e[1]),o.root.rotation.z=Math.sin(E*1.6)*.12;let m=Math.min(1,E/oe,(S-E)/oe);o.mats.forEach((h,v)=>h.opacity=o.opacity[v]*m),i.animate(),i.low?l=setTimeout(()=>n=requestAnimationFrame(D),180):n=requestAnimationFrame(D)};n=requestAnimationFrame(D)}return f(!0),{update(y){r=y,u&&![...i.floorMap.values()].some(g=>g.group===u)&&(cancelAnimationFrame(n),u=null,o.root.visible=!1,f(!0))},dispose(){b=!0,clearTimeout(l),cancelAnimationFrame(n),u?.remove(o.root),i.invalidate()}}}export{Pe as startGhost,_e as startPets};
+// src/fun/pets.ts
+function shapes(lib) {
+  const geo = (pos) => {
+    const g = new lib.BufferGeometry();
+    g.setAttribute("position", new lib.Float32BufferAttribute(pos, 3));
+    let lo = Infinity;
+    let hi = -Infinity;
+    for (let i = 1; i < pos.length; i += 3) {
+      lo = Math.min(lo, pos[i]);
+      hi = Math.max(hi, pos[i]);
+    }
+    const col = [];
+    for (let i = 0; i < pos.length; i += 3) {
+      const k = hi > lo ? (pos[i + 1] - lo) / (hi - lo) : 1;
+      const c = 0.66 + 0.34 * k;
+      col.push(c, c, c);
+    }
+    g.setAttribute("color", new lib.Float32BufferAttribute(col, 3));
+    g.computeBoundingSphere();
+    return g;
+  };
+  const lathe2 = (rings, n) => {
+    const pos = [];
+    for (let i = 0; i < rings.length - 1; i++) {
+      const [r0, y0] = rings[i];
+      const [r1, y1] = rings[i + 1];
+      for (let k = 0; k < n; k++) {
+        const a0 = k / n * Math.PI * 2;
+        const a1 = (k + 1) / n * Math.PI * 2;
+        const p = (r, y, a) => [Math.cos(a) * r, y, Math.sin(a) * r];
+        pos.push(...p(r0, y0, a0), ...p(r1, y1, a0), ...p(r1, y1, a1), ...p(r0, y0, a0), ...p(r1, y1, a1), ...p(r0, y0, a1));
+      }
+    }
+    return geo(pos);
+  };
+  const sphere = (n) => lathe2(Array.from({ length: n / 2 + 1 }, (_, i) => [Math.sin(i / (n / 2) * Math.PI) * 0.5, -Math.cos(i / (n / 2) * Math.PI) * 0.5]), n);
+  return {
+    /** A unit sphere (diameter 1): scale it to an ellipsoid. */
+    ball: sphere(14),
+    cylinder: (rTop, rBottom, h, n = 8) => lathe2([[0, -h / 2], [rBottom, -h / 2], [rTop, h / 2], [0, h / 2]], n),
+    cone: (r, h, n = 8) => lathe2([[0, -h / 2], [r, -h / 2], [0, h / 2]], n)
+  };
+}
+var FURS = {
+  orange: ["#e0954a", "#fbe6cf"],
+  tabby: ["#a8865d", "#e8d6bb"],
+  black: ["#2c2c33", "#5a5a66"],
+  white: ["#f1f1f4", "#e6e1e4"],
+  grey: ["#9097a3", "#d9dce2"],
+  brown: ["#7d5536", "#d4a97c"],
+  calico: ["#f4f0e8", "#e09045"],
+  golden: ["#e3b46b", "#f7e3bd"],
+  cream: ["#efe0c4", "#fff6e6"]
+};
+var LOOKS = {
+  cat: { len: 0.32, wid: 0.17, hi: 0.16, leg: 0.09, head: 0.115, snout: 0, ears: "cat", tail: "cat", speed: 0.55 },
+  rabbit: { len: 0.27, wid: 0.19, hi: 0.17, leg: 0.04, head: 0.09, snout: 0, ears: "bunny", tail: "pom", speed: 0.6 },
+  dachshund: { len: 0.48, wid: 0.14, hi: 0.14, leg: 0.07, head: 0.105, snout: 0.08, ears: "floppy", tail: "dog", speed: 0.7 },
+  pug: { len: 0.3, wid: 0.21, hi: 0.18, leg: 0.1, head: 0.13, snout: 0.02, ears: "floppy", tail: "curl", speed: 0.55 },
+  terrier: { len: 0.32, wid: 0.16, hi: 0.16, leg: 0.13, head: 0.11, snout: 0.06, ears: "pointy", tail: "dog", speed: 0.8 },
+  labrador: { len: 0.56, wid: 0.23, hi: 0.23, leg: 0.24, head: 0.14, snout: 0.09, ears: "floppy", tail: "dog", speed: 0.85 },
+  shepherd: { len: 0.62, wid: 0.23, hi: 0.25, leg: 0.3, head: 0.14, snout: 0.11, ears: "pointy", tail: "bushy", speed: 0.9 }
+};
+var lookOf = (pet) => pet.kind === "dog" ? LOOKS[pet.breed ?? "labrador"] ?? LOOKS.labrador : LOOKS[pet.kind];
+function buildModel(lib, pet) {
+  const S = shapes(lib);
+  const L = lookOf(pet);
+  const [main, second] = FURS[pet.fur] ?? FURS.orange;
+  const m1 = new lib.MeshBasicMaterial({ color: main, vertexColors: true });
+  const m2 = new lib.MeshBasicMaterial({ color: second, vertexColors: true });
+  const earMat = new lib.MeshBasicMaterial({ color: new lib.Color(main).multiplyScalar(0.78), vertexColors: true });
+  const paw = new lib.MeshBasicMaterial({ color: new lib.Color(main).lerp(new lib.Color(second), 0.6), vertexColors: true });
+  const dark = new lib.MeshBasicMaterial({ color: "#16161c" });
+  const shine = new lib.MeshBasicMaterial({ color: "#ffffff" });
+  const nose = new lib.MeshBasicMaterial({ color: pet.kind === "dog" ? "#1d1d22" : "#f08aa0" });
+  const ball = (mat, sx, sy, sz, x = 0, y = 0, z = 0) => {
+    const m = new lib.Mesh(S.ball, mat);
+    m.scale.set(sx, sy, sz);
+    m.position.set(x, y, z);
+    return m;
+  };
+  const root = new lib.Group();
+  const body = new lib.Group();
+  root.add(body);
+  const cy = L.leg + L.hi / 2;
+  body.add(ball(m1, L.wid, L.hi, L.len, 0, cy, 0), ball(m2, L.wid * 0.78, L.hi * 0.72, L.len * 0.55, 0, cy - L.hi * 0.12, L.len * 0.16));
+  const legs = [];
+  const lr = Math.min(0.04, L.wid * 0.17);
+  for (const [x, z] of [
+    [-1, 1],
+    [1, 1],
+    [-1, -1],
+    [1, -1]
+  ]) {
+    const g2 = new lib.Group();
+    const hip = L.leg + L.hi * 0.25;
+    g2.position.set(x * L.wid * 0.27, hip, z * L.len * 0.3);
+    const leg = new lib.Mesh(S.cylinder(lr * 0.9, lr, hip, 8), m1);
+    leg.position.y = -hip / 2;
+    g2.add(leg, ball(paw, lr * 2.3, lr * 1.4, lr * 2.6, 0, -hip + lr * 0.6, lr * 0.3));
+    body.add(g2);
+    legs.push(g2);
+  }
+  const head = new lib.Group();
+  const h = L.head;
+  head.position.set(0, L.leg + L.hi * 0.9 + h * 0.45, L.len / 2 + h * 0.45);
+  head.add(ball(m1, h * 2.15, h * 1.95, h * 1.95));
+  const sn = Math.max(0.025, L.snout);
+  head.add(ball(m2, h * 1.05, h * 0.8, sn * 1.6 + h * 0.5, 0, -h * 0.32, h * 0.72 + sn * 0.45));
+  head.add(ball(nose, h * 0.28, h * 0.2, h * 0.2, 0, -h * 0.12, h * 0.95 + sn * 1.1));
+  const eyes = [];
+  for (const side of [-1, 1]) {
+    const e = new lib.Group();
+    e.position.set(side * h * 0.42, h * 0.12, h * 0.82);
+    e.add(ball(dark, h * 0.34, h * 0.38, h * 0.2), ball(shine, h * 0.11, h * 0.11, h * 0.08, side * -h * 0.05, h * 0.08, h * 0.08));
+    head.add(e);
+    eyes.push(e);
+    if (L.ears === "cat") {
+      const ear = new lib.Mesh(S.cone(h * 0.4, h * 0.75, 4), m1);
+      ear.position.set(side * h * 0.55, h * 0.88, -h * 0.05);
+      ear.rotation.set(0, Math.PI / 4, side * -0.35);
+      const inner = new lib.Mesh(S.cone(h * 0.22, h * 0.45, 4), nose);
+      inner.position.set(side * h * 0.53, h * 0.84, h * 0.06);
+      inner.rotation.set(0, Math.PI / 4, side * -0.35);
+      head.add(ear, inner);
+    } else if (L.ears === "bunny") {
+      const ear = ball(m1, h * 0.5, h * 2.2, h * 0.3, side * h * 0.35, h * 1.6, -h * 0.15);
+      ear.rotation.z = side * -0.18;
+      const inner = ball(nose, h * 0.26, h * 1.6, h * 0.1, side * h * 0.35, h * 1.6, -h * 0.02);
+      inner.rotation.z = side * -0.18;
+      head.add(ear, inner);
+    } else if (L.ears === "floppy") {
+      const ear = ball(earMat, h * 0.35, h * 1.1, h * 0.75, side * h * 0.98, -h * 0.15, -h * 0.05);
+      ear.rotation.z = side * 0.25;
+      head.add(ear);
+    } else {
+      const ear = new lib.Mesh(S.cone(h * 0.32, h * 0.95, 6), m1);
+      ear.position.set(side * h * 0.5, h * 1, -h * 0.1);
+      ear.rotation.z = side * -0.2;
+      head.add(ear);
+    }
+  }
+  body.add(head);
+  const tail = new lib.Group();
+  tail.position.set(0, L.leg + L.hi * 0.7, -L.len / 2 + 0.01);
+  if (L.tail === "pom") tail.add(ball(m2, 0.08, 0.08, 0.08));
+  else if (L.tail === "curl") tail.add(ball(m1, 0.07, 0.07, 0.06, 0, 0.03, -0.01));
+  else {
+    const tl = L.tail === "cat" ? 0.28 : L.tail === "bushy" ? 0.26 : 0.18;
+    const thick = L.tail === "bushy" ? 0.045 : L.tail === "cat" ? 0.024 : 0.022;
+    if (L.tail === "bushy") tail.add(ball(m1, thick * 2, tl, thick * 2, 0, tl / 2, 0));
+    else {
+      const t = new lib.Mesh(S.cylinder(thick * 0.75, thick, tl, 8), m1);
+      t.position.y = tl / 2;
+      tail.add(t);
+    }
+    if (L.tail === "cat") tail.add(ball(m1, thick * 1.8, thick * 1.8, thick * 1.8, 0, tl, 0));
+  }
+  body.add(tail);
+  const c = document.createElement("canvas");
+  c.width = 128;
+  c.height = 64;
+  const g = c.getContext("2d");
+  g.fillStyle = "#cfe9ff";
+  g.font = "bold 40px system-ui, sans-serif";
+  g.fillText("z", 20, 52);
+  g.font = "bold 54px system-ui, sans-serif";
+  g.fillText("Z", 58, 46);
+  const zzz = new lib.Mesh(new lib.PlaneGeometry(0.3, 0.15), new lib.MeshBasicMaterial({ map: new lib.CanvasTexture(c), transparent: true, depthWrite: false, side: lib.DoubleSide }));
+  zzz.rotation.x = -0.7;
+  zzz.position.set(0, L.hi + h * 2 + 0.12, 0);
+  zzz.visible = false;
+  root.add(zzz);
+  return { root, body, legs, tail, head, eyes, zzz };
+}
+var itemOf = (type) => type.slice(type.lastIndexOf(":") + 1).toLowerCase();
+var SOFA = /^(sofa|armchair|chesterfield|corner_(left|right|sofa))|sofa/;
+var BED = /^bed(_|$)/;
+var CAT_HOME = /^(cat_bed|cat_cave|cat_tree)$/;
+var DOG_HOME = /^(dog_bed|dog_basket|dog_house)$/;
+var BOWLS = /^(bowls|pet_feeder|water_fountain)$/;
+function obstaclesOf(floor, base) {
+  return floor.furniture.filter((f) => f.h >= 0.25 && base(floor, f) < 0.3 && !/lamp|light|leuchte|rug|carpet|teppich|(^|_)mat($|_)|parking|stellplatz/.test(itemOf(f.type))).map((f) => {
+    const a = f.rotation * Math.PI / 180;
+    return { c: [f.x, f.z], u: [Math.cos(a), Math.sin(a)], hw: f.w / 2, hd: f.d / 2 };
+  });
+}
+function rugsOf(floor) {
+  return floor.furniture.filter((f) => /rug|carpet|teppich|(^|_)mat($|_)/.test(itemOf(f.type)) && f.h <= 0.06).map((f) => ({ x: f.x, z: f.z, hw: f.w / 2, hd: f.d / 2, a: f.rotation * Math.PI / 180, top: f.h + 6e-3 }));
+}
+function rugTop(rugs, p) {
+  let top = 0;
+  for (const r of rugs) {
+    const dx = p[0] - r.x;
+    const dz = p[1] - r.z;
+    const u = dx * Math.cos(r.a) + dz * Math.sin(r.a);
+    const v = -dx * Math.sin(r.a) + dz * Math.cos(r.a);
+    if (Math.abs(u) <= r.hw && Math.abs(v) <= r.hd) top = Math.max(top, r.top);
+  }
+  return top;
+}
+function pointIn(p, poly) {
+  let inside = false;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const [xi, zi] = poly[i];
+    const [xj, zj] = poly[j];
+    if (zi > p[1] !== zj > p[1] && p[0] < (xj - xi) * (p[1] - zi) / (zj - zi) + xi) inside = !inside;
+  }
+  return inside;
+}
+function spotsFor(floor, kind, map) {
+  const out = [];
+  const along = (f, k) => {
+    const a = f.rotation * Math.PI / 180;
+    return [f.x - Math.sin(a) * k, f.z + Math.cos(a) * k];
+  };
+  const facing = (f) => {
+    const [fx, fz] = along(f, 1);
+    return Math.atan2(fx - f.x, fz - f.z);
+  };
+  for (const f of floor.furniture) {
+    const t = itemOf(f.type);
+    const own = kind === "cat" ? CAT_HOME.test(t) : kind === "dog" ? DOG_HOME.test(t) : false;
+    if (own) {
+      const p = t === "cat_tree" || t === "dog_house" ? along(f, f.d / 2 + 0.3) : [f.x, f.z];
+      out.push({ p, y: t === "cat_tree" || t === "dog_house" ? 0 : 0.06, approach: null, face: facing(f), sleep: true });
+    } else if (BOWLS.test(t) && kind !== "rabbit") out.push({ p: along(f, f.d / 2 + 0.25), y: 0, approach: null, face: facing(f) + Math.PI, sleep: false, visit: true });
+    else if ((SOFA.test(t) || BED.test(t)) && !t.includes("bunk") && !t.startsWith("dog") && !t.startsWith("cat")) {
+      const bed = BED.test(t) || t === "sofa_bed";
+      const free = (s) => {
+        const q = along(f, s * (f.d / 2 + 0.35));
+        return !map.blocked(q) && !!map.roomAt(q);
+      };
+      let side = 1;
+      if (!free(1) && free(-1)) side = -1;
+      else if (free(1) === free(-1)) {
+        const room = floor.rooms.find((r) => r.points.length >= 3 && r.points.length && pointIn([f.x, f.z], r.points));
+        if (room) {
+          const cx = room.points.reduce((s, p) => s + p[0], 0) / room.points.length;
+          const cz = room.points.reduce((s, p) => s + p[1], 0) / room.points.length;
+          const d = (s) => {
+            const q = along(f, s);
+            return Math.hypot(q[0] - cx, q[1] - cz);
+          };
+          if (d(-1) < d(1)) side = -1;
+        }
+      }
+      const front = along(f, side * (f.d / 2 + 0.35));
+      const face = facing(f) + (side < 0 ? Math.PI : 0);
+      if (kind === "cat") {
+        const seat = bed ? Math.min(0.58, f.h * 0.64) : Math.min(0.5, f.h * 0.58);
+        out.push({ p: along(f, bed ? 0 : side * f.d * 0.12), y: seat, approach: front, face, sleep: bed });
+      } else out.push({ p: along(f, side * (f.d / 2 + (kind === "dog" ? 0.5 : 0.35))), y: 0, approach: null, face: face + (kind === "dog" ? Math.PI / 2 : 0), sleep: bed });
+    } else if (t === "rug") out.push({ p: [f.x, f.z], y: 0, approach: null, face: null, sleep: false });
+  }
+  return out;
+}
+function stairWay(item, w, d) {
+  const out = 0.35;
+  if (item === "stairs_u") {
+    const fw = (w - Math.min(0.12, w * 0.06)) / 2;
+    const landing = Math.min(fw, d * 0.45);
+    const xa = -w / 2 + fw / 2;
+    const xb = w / 2 - fw / 2;
+    const zl = -d / 2 + landing / 2;
+    return [[xa, d / 2 + out, 0], [xa, d / 2, 0], [xa, zl, 0.5], [xb, zl, 0.5], [xb, d / 2 - 0.15, 1], [xb, d / 2 + out, 1]];
+  }
+  if (item === "u_shape" || item === "u_open_winder") return [[0.6, 1.5 + out, 0], [0.6, 1.5, 0], [0.6, -1.05, 0.5], [-0.6, -1.05, 0.5], [-0.6, 1.4, 1], [-0.6, 1.4 + out, 1]];
+  if (item === "l_shape") return [[0.6, 1.3 + out, 0], [0.6, 1.3, 0], [0.6, -0.8, 0.5], [0.1, -0.8, 0.5], [-1.1, -0.8, 1], [-1.1 - out, -0.8, 1]];
+  if (item === "spiral") {
+    const way = [];
+    for (let i = 0; i <= 12; i++) {
+      const a = (-90 + i * 300 / 12) * Math.PI / 180;
+      way.push([Math.cos(a) * 0.45, Math.sin(a) * 0.45, i / 12]);
+    }
+    const a0 = -90 * Math.PI / 180;
+    const a1 = 210 * Math.PI / 180;
+    return [[Math.cos(a0) * 1, Math.sin(a0) * 1, 0], ...way, [Math.cos(a1) * 1, Math.sin(a1) * 1, 1]];
+  }
+  if (item === "winder_bottom") {
+    const zt = d / 2 - w;
+    const turn = [0.25, 0.5, 0.75].map((k) => {
+      const phi = k * Math.PI / 2;
+      return [w / 2 - Math.sin(phi) * (w / 2), zt + Math.cos(phi) * (w / 2), k * 3 / 14];
+    });
+    return [[w / 2 + out, zt + w / 2, 0], [w / 2, zt + w / 2, 0], ...turn, [0, zt, 3 / 14], [0, -d / 2, 1], [0, -d / 2 - out, 1]];
+  }
+  if (item === "corner_bottom") {
+    const xs = -w / 2 + 0.5;
+    const zl = d / 2 - 0.5;
+    return [[w / 2 + out, zl, 0], [w / 2, zl, 0], [xs + 0.3, zl, 3 / 14], [xs, zl, 4 / 14], [xs, d / 2 - 1, 4 / 14], [xs, -d / 2, 1], [xs, -d / 2 - out, 1]];
+  }
+  if (item === "stairs" || item === "straight" || item === "straight_open" || item === "floating" || item === "space_saver") return [[0, d / 2 + out, 0], [0, d / 2, 0], [0, -d / 2, 1], [0, -d / 2 - out, 1]];
+  return null;
+}
+function stairLinks(b) {
+  const floors = b.floors.filter((f) => f.rooms.some((r) => r.points.length >= 3)).sort((x, y) => x.elevation - y.elevation);
+  const out = [];
+  for (let i = 0; i < floors.length - 1; i++) {
+    const lower = floors[i];
+    const upper = floors[i + 1];
+    const rise = upper.elevation - lower.elevation;
+    for (const f of lower.furniture) {
+      const way = stairWay(itemOf(f.type), f.w, f.d);
+      if (!way) continue;
+      const a = f.rotation * Math.PI / 180;
+      const m = f.mirror ? -1 : 1;
+      const W = (x, z) => [f.x + x * m * Math.cos(a) - z * Math.sin(a), f.z + x * m * Math.sin(a) + z * Math.cos(a)];
+      const pts = way.map(([x, z, t]) => {
+        const [wx, wz] = W(x, z);
+        return [wx, t * rise, wz];
+      });
+      const z0 = way[1][1];
+      const z1 = way[way.length - 2][1];
+      const side = f.w / 2 + 0.35;
+      out.push({
+        lower: lower.id,
+        upper: upper.id,
+        pts: pts.slice(1, -1),
+        // (beside: at the first steps, a little up the stair, where a wall in front leaves room)
+        foot: [[pts[0][0], pts[0][2]], ...[0, -0.35, -0.7].flatMap((k) => [W(-side, z0 + k), W(side, z0 + k)])],
+        top: [[pts[pts.length - 1][0], pts[pts.length - 1][2]], ...[0, 0.35, 0.7].flatMap((k) => [W(-side, z1 + k), W(side, z1 + k)])]
+      });
+    }
+  }
+  return out;
+}
+var TANKS = {
+  aquarium: { w: 0.78 / 0.8, d: 0.33 / 0.35, y0: 0.08 / 0.5, y1: 0.4 / 0.5, fish: 4 },
+  aquarium_large: { w: 1.18 / 1.2, d: 0.43 / 0.45, y0: 0.84 / 1.4, y1: 1.24 / 1.4, fish: 7 }
+};
+var FISH_COLORS = ["#ff8c3a", "#ffd23f", "#3fe0ff", "#ff5d8f", "#9b7bff", "#7dff9b", "#ff6a3d"];
+var rnd = (a, b) => a + Math.random() * (b - a);
+var angleTo = (from, to) => {
+  let d = to - from;
+  while (d > Math.PI) d -= 2 * Math.PI;
+  while (d < -Math.PI) d += 2 * Math.PI;
+  return d;
+};
+function startPets(ctx) {
+  const { lib, viewer } = ctx;
+  let animals = [];
+  let raf = 0;
+  let timer;
+  let last = 0;
+  let links = [];
+  let tanks = [];
+  let fishes = [];
+  let fishTimer;
+  let floors = /* @__PURE__ */ new Map();
+  let plan = ctx.building;
+  const floorInfo = (id) => {
+    let info = floors.get(id);
+    if (!info) {
+      const floor = plan.floors.find((f) => f.id === id);
+      const shut = ctx.closedDoors?.() ?? /* @__PURE__ */ new Set();
+      const walkable = shut.size ? { ...floor, openings: floor.openings.filter((o) => !shut.has(o.id)) } : floor;
+      info = { floor, map: new ctx.FloorMap(plan, walkable, obstaclesOf(floor, ctx.base)), rooms: floor.rooms.filter((r) => r.points.length >= 3), spots: /* @__PURE__ */ new Map(), rugs: rugsOf(floor) };
+      floors.set(id, info);
+    }
+    return info;
+  };
+  const toFloor = (a, id) => {
+    const info = floorInfo(id);
+    a.floorId = id;
+    a.map = info.map;
+    a.rooms = info.rooms;
+    let spots = info.spots.get(a.pet.kind);
+    if (!spots) info.spots.set(a.pet.kind, spots = spotsFor(info.floor, a.pet.kind, info.map));
+    a.spots = spots;
+    viewer.floorMap.get(id)?.group.add(a.model.root);
+  };
+  const floorFor = (b, pet) => {
+    const withRooms = b.floors.filter((f) => f.rooms.some((r) => r.points.length >= 3));
+    return withRooms.find((f) => f.id === pet.floor_id) ?? [...withRooms].sort((x, y) => Math.abs(x.elevation) - Math.abs(y.elevation))[0];
+  };
+  const somewhere = (a) => {
+    const r = a.rooms[Math.floor(Math.random() * a.rooms.length)];
+    const xs = r.points.map((p) => p[0]);
+    const zs = r.points.map((p) => p[1]);
+    for (let i = 0; i < 12; i++) {
+      const p = [rnd(Math.min(...xs) + 0.4, Math.max(...xs) - 0.4), rnd(Math.min(...zs) + 0.4, Math.max(...zs) - 0.4)];
+      if (a.map.roomAt(p) && !a.map.blocked(p)) return p;
+    }
+    return a.map.freeNear([(Math.min(...xs) + Math.max(...xs)) / 2, (Math.min(...zs) + Math.max(...zs)) / 2]);
+  };
+  let doorSig = "";
+  const checkDoors = () => {
+    const sig = [...ctx.closedDoors?.() ?? []].sort().join(",");
+    if (sig === doorSig) return;
+    doorSig = sig;
+    floors = /* @__PURE__ */ new Map();
+    for (const x of animals) if (!x.climb) toFloor(x, x.floorId);
+  };
+  const decide = (a, now) => {
+    checkDoors();
+    const night = ctx.night();
+    const sleepers = a.spots.filter((s) => s.sleep);
+    const choices = night && sleepers.length ? sleepers : a.spots;
+    const start = a.on?.approach ?? a.pos;
+    const here = links.filter((l) => l.lower === a.floorId || l.upper === a.floorId);
+    if (here.length && !night && Math.random() < 0.22) {
+      const link = here[Math.floor(Math.random() * here.length)];
+      const up = link.lower === a.floorId;
+      let path = null;
+      let entry = null;
+      for (const c of up ? link.foot : link.top) {
+        if (a.map.blocked(c) || !a.map.roomAt(c)) continue;
+        path = a.map.path(start, c);
+        if (path) {
+          entry = c;
+          break;
+        }
+      }
+      if (path && entry) {
+        a.stairsEntry = entry;
+        a.path = path;
+        a.goal = null;
+        a.stairs = { link, up };
+        a.mode = "walk";
+        if (a.on?.approach && a.y > 0.05) a.jump = { from: [a.pos[0], a.y, a.pos[1]], to: [a.on.approach[0], 0, a.on.approach[1]], t: 0, then: "walk" };
+        a.on = null;
+        return;
+      }
+    }
+    for (let tries = 0; tries < 6; tries++) {
+      const fav = choices.length && (night || Math.random() < 0.45) ? choices[Math.floor(Math.random() * choices.length)] : null;
+      if (fav && (fav === a.on || fav === a.last && choices.length > 1 && !night)) continue;
+      const goal = fav ? fav.approach ?? fav.p : somewhere(a);
+      const target = a.map.blocked(goal) ? a.map.freeNear(goal) : goal;
+      const path = Math.hypot(target[0] - start[0], target[1] - start[1]) < 0.05 ? [] : a.map.path(start, target);
+      if (!path) continue;
+      a.path = path;
+      a.goal = fav;
+      if (fav) a.last = fav;
+      a.stairs = null;
+      a.mode = "walk";
+      if (a.on?.approach && a.y > 0.05) a.jump = { from: [a.pos[0], a.y, a.pos[1]], to: [a.on.approach[0], 0, a.on.approach[1]], t: 0, then: "walk" };
+      a.on = null;
+      return;
+    }
+    a.mode = night ? "sleep" : "rest";
+    a.until = now + rnd(20, 60) * 1e3;
+  };
+  const pose = (a) => {
+    const L = a.look;
+    const lying = (a.mode === "rest" || a.mode === "sleep") && !a.jump;
+    const lift = !a.climb && !a.jump && a.y < 0.05 ? rugTop(floors.get(a.floorId)?.rugs ?? [], a.pos) : 0;
+    a.model.root.position.set(a.pos[0], a.y + lift, a.pos[1]);
+    a.model.root.rotation.y = a.heading;
+    const moving = (a.mode === "walk" || a.mode === "climb") && !a.jump;
+    const swing = moving ? Math.sin(a.phase) : 0;
+    a.model.legs.forEach((l, i) => {
+      l.rotation.x = lying ? 0 : (i === 0 || i === 3 ? swing : -swing) * 0.6;
+      l.scale.y = lying ? 0.08 : 1;
+    });
+    const hop = a.pet.kind === "rabbit" && moving ? Math.abs(Math.sin(a.phase)) * 0.07 : 0;
+    a.model.body.position.y = (lying ? -(L.leg + L.hi * 0.12) : 0) + hop;
+    a.model.head.rotation.x = a.mode === "sleep" ? 0.45 : a.mode === "stand" ? 0.5 : lying ? 0.12 : Math.sin(a.phase * 2) * 0.04;
+    if (lying) a.model.tail.rotation.set(-1.45, 0, 0.9);
+    else a.model.tail.rotation.set(L.tail === "cat" ? -0.5 : -0.9, 0, Math.sin(a.phase * 0.7) * (moving ? 0.6 : 0.2));
+    for (const e of a.model.eyes) e.scale.y = a.mode === "sleep" ? 0.12 : 1;
+    a.model.zzz.visible = a.mode === "sleep";
+  };
+  const arrive = (a, now) => {
+    if (a.stairs) {
+      const { link, up } = a.stairs;
+      a.stairs = null;
+      const other = floorInfo(up ? link.upper : link.lower).map;
+      const offs = up ? link.top : link.foot;
+      const off = offs.find((c) => !other.blocked(c) && other.roomAt(c)) ?? other.freeNear(offs[0]);
+      const rise = link.pts[link.pts.length - 1][1];
+      const steps = up ? link.pts : [...link.pts].reverse();
+      const pts = [...steps, [off[0], up ? rise : 0, off[1]]];
+      const from = a.stairsEntry ?? a.pos;
+      if (!up) toFloor(a, link.lower);
+      a.pos = [from[0], from[1]];
+      a.y = up ? 0 : rise;
+      a.climb = { pts, to: up ? link.upper : link.lower };
+      a.mode = "climb";
+      return;
+    }
+    const s = a.goal;
+    a.goal = null;
+    if (s?.visit) {
+      a.mode = "stand";
+      a.until = now + rnd(4, 9) * 1e3;
+      if (s.face != null) a.heading = s.face;
+      return;
+    }
+    const mode = ctx.night() ? "sleep" : "rest";
+    a.until = now + (mode === "sleep" ? rnd(120, 400) : a.pet.kind === "cat" ? rnd(30, 120) : rnd(15, 60)) * 1e3;
+    a.on = s;
+    if (s && s.y > 0.05 && s.approach) a.jump = { from: [a.pos[0], a.y, a.pos[1]], to: [s.p[0], s.y, s.p[1]], t: 0, then: mode };
+    else {
+      if (s) {
+        a.pos = s.p;
+        a.y = s.y;
+      }
+      if (s?.face != null) a.heading = s.face;
+      a.mode = mode;
+    }
+  };
+  const step = (a, dt, now) => {
+    if (a.jump) {
+      const j = a.jump;
+      j.t = Math.min(1, j.t + dt / 0.45);
+      const k = j.t;
+      a.pos = [j.from[0] + (j.to[0] - j.from[0]) * k, j.from[2] + (j.to[2] - j.from[2]) * k];
+      a.y = j.from[1] + (j.to[1] - j.from[1]) * k + Math.sin(k * Math.PI) * 0.22;
+      const dx2 = j.to[0] - j.from[0];
+      const dz2 = j.to[2] - j.from[2];
+      if (Math.hypot(dx2, dz2) > 0.02) a.heading = Math.atan2(dx2, dz2);
+      if (k >= 1) {
+        a.y = j.to[1];
+        a.jump = null;
+        a.mode = j.then;
+        if (j.then !== "walk" && a.on?.face != null) a.heading = a.on.face;
+      }
+      pose(a);
+      return true;
+    }
+    if (a.mode === "climb" && a.climb) {
+      const c = a.climb;
+      const next2 = c.pts[0];
+      if (!next2) {
+        a.climb = null;
+        a.y = 0;
+        if (c.to !== a.floorId) toFloor(a, c.to);
+        a.mode = "rest";
+        a.until = now + rnd(1, 3) * 1e3;
+        pose(a);
+        return true;
+      }
+      const dx2 = next2[0] - a.pos[0];
+      const dz2 = next2[2] - a.pos[1];
+      const dy = next2[1] - a.y;
+      const dist2 = Math.hypot(dx2, dy, dz2);
+      if (Math.hypot(dx2, dz2) > 0.02) a.heading += angleTo(a.heading, Math.atan2(dx2, dz2)) * Math.min(1, dt * 8);
+      const move2 = Math.min(dist2, a.look.speed * 0.95 * dt);
+      if (dist2 < 0.02) c.pts.shift();
+      else {
+        a.pos = [a.pos[0] + dx2 / dist2 * move2, a.pos[1] + dz2 / dist2 * move2];
+        a.y += dy / dist2 * move2;
+        a.phase += dt * a.look.speed * 22;
+      }
+      pose(a);
+      return true;
+    }
+    if (a.mode !== "walk") {
+      if (now < a.until) return false;
+      decide(a, now);
+      pose(a);
+      return a.mode === "walk";
+    }
+    const next = a.path[0];
+    if (!next) {
+      arrive(a, now);
+      pose(a);
+      return true;
+    }
+    const dx = next[0] - a.pos[0];
+    const dz = next[1] - a.pos[1];
+    const dist = Math.hypot(dx, dz);
+    const turn = angleTo(a.heading, Math.atan2(dx, dz));
+    a.heading += Math.sign(turn) * Math.min(Math.abs(turn), dt * 6);
+    const move = Math.min(dist, a.look.speed * dt);
+    if (dist < 0.02) a.path.shift();
+    else {
+      a.pos = [a.pos[0] + dx / dist * move, a.pos[1] + dz / dist * move];
+      a.phase += dt * a.look.speed * 20;
+    }
+    pose(a);
+    return true;
+  };
+  const tick = (now) => {
+    raf = 0;
+    if (viewer.resting) {
+      last = 0;
+      timer = setTimeout(() => raf = requestAnimationFrame(tick), 1e3);
+      return;
+    }
+    const dt = last ? Math.min(viewer.low ? 0.3 : 0.1, (now - last) / 1e3) : 0;
+    last = now;
+    let active = false;
+    for (const a of animals) if (step(a, dt, now)) active = true;
+    if (active) viewer.animate();
+    if (active && viewer.low) timer = setTimeout(() => raf = requestAnimationFrame(tick), 180);
+    else if (active) raf = requestAnimationFrame(tick);
+    else {
+      const wait = Math.max(500, Math.min(...animals.map((a) => a.until - performance.now()), 6e4));
+      last = 0;
+      timer = setTimeout(() => raf = requestAnimationFrame(tick), wait);
+    }
+  };
+  const buildFish = (b) => {
+    const S = shapes(lib);
+    for (const floor of b.floors) {
+      const fv = viewer.floorMap.get(floor.id);
+      if (!fv) continue;
+      for (const f of floor.furniture) {
+        const spec = TANKS[itemOf(f.type)];
+        if (!spec) continue;
+        const tank = new lib.Group();
+        tank.position.set(f.x, ctx.base(floor, f), f.z);
+        tank.rotation.y = -f.rotation * Math.PI / 180;
+        const halfW = f.w * spec.w / 2;
+        const y0 = f.h * spec.y0;
+        const y1 = f.h * spec.y1;
+        for (let i = 0; i < spec.fish; i++) {
+          const color = FISH_COLORS[(i * 3 + Math.round(f.x * 7)) % FISH_COLORS.length];
+          const mat = new lib.MeshBasicMaterial({ color, vertexColors: true });
+          const size = 0.035 + i * 37 % 10 / 400;
+          for (const side of [1, -1]) {
+            const g = new lib.Group();
+            const body = new lib.Mesh(S.ball, mat);
+            body.scale.set(size * 1.8, size, 4e-3);
+            const tail = new lib.Mesh(S.ball, mat);
+            tail.scale.set(size * 0.7, size * 0.9, 4e-3);
+            tail.position.x = -size * 1.15;
+            g.add(body, tail);
+            g.position.z = side * (f.d * spec.d / 2 + 4e-3);
+            tank.add(g);
+            fishes.push({ g, y: y0 + (i + 0.5) / spec.fish * (y1 - y0), amp: halfW - size * 2, speed: 0.25 + i * 53 % 10 / 30, phase: i * 1.7 + (side > 0 ? 0 : 0.6) });
+          }
+        }
+        fv.group.add(tank);
+        tanks.push(tank);
+      }
+    }
+    const swim = () => {
+      if (document.hidden || viewer.resting) return;
+      const t = performance.now() / 1e3;
+      for (const fi of fishes) {
+        const s = Math.sin(t * fi.speed + fi.phase);
+        fi.g.position.x = fi.amp * s;
+        fi.g.position.y = fi.y + Math.sin(t * fi.speed * 2.3 + fi.phase) * 0.012;
+        fi.g.scale.x = Math.cos(t * fi.speed + fi.phase) >= 0 ? 1 : -1;
+      }
+      viewer.animate();
+    };
+    if (fishes.length) {
+      swim();
+      fishTimer = setInterval(swim, 160);
+    }
+  };
+  const clear = () => {
+    cancelAnimationFrame(raf);
+    clearTimeout(timer);
+    clearInterval(fishTimer);
+    for (const a of animals) a.model.root.removeFromParent();
+    for (const t of tanks) t.removeFromParent();
+    animals = [];
+    tanks = [];
+    fishes = [];
+  };
+  const update = (b, pets) => {
+    const before = new Map(animals.map((a) => [a.pet.id, a]));
+    clear();
+    plan = b;
+    floors = /* @__PURE__ */ new Map();
+    links = stairLinks(b);
+    for (const pet of pets) {
+      const prev = before.get(pet.id);
+      const floor = (prev && prev.pet.floor_id === pet.floor_id ? b.floors.find((f) => f.id === prev.floorId) : void 0) ?? floorFor(b, pet);
+      if (!floor || !viewer.floorMap.get(floor.id) || !floorInfo(floor.id).rooms.length) continue;
+      const old = prev;
+      const a = {
+        pet,
+        look: lookOf(pet),
+        model: buildModel(lib, pet),
+        floorId: floor.id,
+        map: floorInfo(floor.id).map,
+        spots: [],
+        rooms: [],
+        pos: [0, 0],
+        y: 0,
+        heading: old?.heading ?? rnd(0, Math.PI * 2),
+        path: [],
+        goal: null,
+        on: null,
+        mode: "rest",
+        until: 0,
+        phase: 0,
+        jump: null,
+        stairs: null,
+        stairsEntry: null,
+        climb: null
+      };
+      toFloor(a, floor.id);
+      a.pos = old && old.floorId === floor.id && !old.climb ? old.on?.approach ?? old.pos : somewhere(a);
+      pose(a);
+      animals.push(a);
+    }
+    buildFish(b);
+    last = 0;
+    viewer.invalidate();
+    if (animals.length) raf = requestAnimationFrame(tick);
+  };
+  update(ctx.building, ctx.pets);
+  return { update, dispose: clear };
+}
+
+// src/model.ts
+var DEFAULT_ROOF = { type: "none", pitch: 35, overhang: 0.4 };
+var DEFAULT_SETTINGS = { wall_exterior: 0.24, wall_interior: 0.12, grid: 0.05, north: 0, roof: { ...DEFAULT_ROOF } };
+var LAMP_TYPES = /* @__PURE__ */ new Set([
+  "lamp_ceiling",
+  "lamp_fan",
+  "lamp_downlight",
+  "lamp_spot",
+  "lamp_panel",
+  "lamp_pendant",
+  "lamp_floor",
+  "lamp_uplight",
+  "lamp_table",
+  "lamp_wall",
+  "led_strip",
+  "lamp_bollard",
+  "lamp_garden"
+]);
+var ELECTRIC_FURNITURE = /* @__PURE__ */ new Set([
+  ...LAMP_TYPES,
+  "radiator",
+  "towel_radiator",
+  "range_hood",
+  "microwave",
+  "coffee_machine",
+  "nest_hub",
+  "ac_unit",
+  "awning",
+  "gate",
+  "fireplace",
+  "printer_3d",
+  "robot_vacuum",
+  "inverter",
+  "home_battery",
+  "wallbox",
+  "meter",
+  "pool_pump",
+  "pool_heat_pump",
+  "pool_dosing",
+  "tv_board",
+  "tv_wall",
+  "desk",
+  "fridge",
+  "fridge_smart",
+  "stove",
+  "oven",
+  "kitchen_tall",
+  "dishwasher",
+  "washer",
+  "dryer",
+  "kitchen",
+  "island",
+  "sink"
+]);
+function signedArea(points) {
+  let a = 0;
+  for (let i = 0; i < points.length; i++) {
+    const [x0, z0] = points[i];
+    const [x1, z1] = points[(i + 1) % points.length];
+    a += x0 * z1 - x1 * z0;
+  }
+  return a / 2;
+}
+function centroid(points) {
+  const a = signedArea(points);
+  if (Math.abs(a) < 1e-9) {
+    const n = points.length || 1;
+    return [points.reduce((s, p) => s + p[0], 0) / n, points.reduce((s, p) => s + p[1], 0) / n];
+  }
+  let cx = 0;
+  let cz = 0;
+  for (let i = 0; i < points.length; i++) {
+    const [x0, z0] = points[i];
+    const [x1, z1] = points[(i + 1) % points.length];
+    const f = x0 * z1 - x1 * z0;
+    cx += (x0 + x1) * f;
+    cz += (z0 + z1) * f;
+  }
+  return [cx / (6 * a), cz / (6 * a)];
+}
+
+// src/fun/ghost.ts
+var SPEED = 0.9;
+var SIZE = 2;
+var HEIGHT = 0.2 + 0.32 * SIZE;
+var FADE = 0.8;
+function lathe(lib, rings, n, wave = 0) {
+  const pos = [];
+  const at = (r, y, a, i) => [Math.cos(a) * r, y + (i === 0 ? Math.sin(a * 6) * wave : 0), Math.sin(a) * r];
+  for (let i = 0; i < rings.length - 1; i++) {
+    const [r0, y0] = rings[i];
+    const [r1, y1] = rings[i + 1];
+    for (let k = 0; k < n; k++) {
+      const a0 = k / n * Math.PI * 2;
+      const a1 = (k + 1) / n * Math.PI * 2;
+      pos.push(...at(r0, y0, a0, i), ...at(r1, y1, a0, i + 1), ...at(r1, y1, a1, i + 1), ...at(r0, y0, a0, i), ...at(r1, y1, a1, i + 1), ...at(r0, y0, a1, i));
+    }
+  }
+  const g = new lib.BufferGeometry();
+  g.setAttribute("position", new lib.Float32BufferAttribute(pos, 3));
+  return g;
+}
+function buildGhost(lib) {
+  const root = new lib.Group();
+  const profile = [[0.24, -0.32], [0.22, -0.1], [0.2, 0.08]];
+  for (let i = 1; i <= 6; i++) {
+    const t = i / 6 * (Math.PI / 2);
+    profile.push([Math.cos(t) * 0.2, 0.08 + Math.sin(t) * 0.2]);
+  }
+  const bodyMat = new lib.MeshBasicMaterial({ color: new lib.Color("#eef6ff"), transparent: true, opacity: 0, depthWrite: false, side: lib.DoubleSide });
+  const body = new lib.Mesh(lathe(lib, profile, 18, 0.035), bodyMat);
+  const haloMat = new lib.MeshBasicMaterial({ color: new lib.Color("#7fe8ff"), transparent: true, opacity: 0, depthWrite: false, side: lib.DoubleSide });
+  const halo = new lib.Mesh(lathe(lib, profile.map(([r, y]) => [r * 1.25 + 0.02, y * 1.12]), 14, 0.04), haloMat);
+  const faceMat = new lib.MeshBasicMaterial({ color: new lib.Color("#141826"), transparent: true, opacity: 0, depthWrite: false });
+  const eye = lathe(lib, [[0, -0.03], [0.022, -0.02], [0.026, 0], [0.022, 0.02], [0, 0.03]], 8);
+  const face = [];
+  for (const x of [-0.07, 0.07]) {
+    const e = new lib.Mesh(eye, faceMat);
+    e.position.set(x, 0.17, 0.18);
+    e.scale.set(1, 1.25, 0.5);
+    face.push(e);
+  }
+  const mouth = new lib.Mesh(eye, faceMat);
+  mouth.position.set(0, 0.08, 0.2);
+  mouth.scale.set(0.9, 0.8, 0.5);
+  face.push(mouth);
+  const arm = lathe(lib, [[0, -0.05], [0.035, -0.03], [0.04, 0.02], [0, 0.05]], 8);
+  for (const x of [-0.22, 0.22]) {
+    const a = new lib.Mesh(arm, bodyMat);
+    a.position.set(x, 0, 0.03);
+    a.rotation.z = x < 0 ? 0.9 : -0.9;
+    root.add(a);
+  }
+  root.add(halo, body, ...face);
+  for (const m of [bodyMat, haloMat, faceMat]) m.depthTest = false;
+  halo.renderOrder = 20;
+  body.renderOrder = 21;
+  for (const f of face) f.renderOrder = 22;
+  root.scale.setScalar(SIZE);
+  root.visible = false;
+  return { root, mats: [bodyMat, haloMat, faceMat], opacity: [0.82, 0.18, 0.9] };
+}
+function startGhost(ctx) {
+  const { lib, viewer } = ctx;
+  let plan = ctx.building;
+  const ghost = buildGhost(lib);
+  let host = null;
+  let raf = 0;
+  let timer;
+  let disposed = false;
+  const wait = (first = false) => {
+    clearTimeout(timer);
+    if (disposed) return;
+    const night = ctx.night();
+    const s = first ? 6 + Math.random() * 8 : night ? 25 + Math.random() * 35 : 70 + Math.random() * 80;
+    timer = setTimeout(fly, s * 1e3);
+  };
+  function fly() {
+    if (disposed) return;
+    const shown = [...viewer.floorMap.values()].filter((f) => f.group.visible && f.floor.rooms.some((r) => r.points.length >= 3));
+    const pick = shown[Math.floor(Math.random() * shown.length)];
+    if (!pick) return wait();
+    const floor = plan.floors.find((f) => f.id === pick.floor.id) ?? pick.floor;
+    const rooms = floor.rooms.filter((r) => r.points.length >= 3);
+    const stops = Array.from({ length: Math.min(4, Math.max(2, rooms.length)) }, () => centroid(rooms[Math.floor(Math.random() * rooms.length)].points));
+    const path = stops.map(([x, z]) => [x + (Math.random() - 0.5) * 0.8, z + (Math.random() - 0.5) * 0.8]);
+    if (path.length < 2 || Math.hypot(path[1][0] - path[0][0], path[1][1] - path[0][1]) < 0.5) path.push([path[0][0] + 2, path[0][1] + 1.5]);
+    const lens = path.slice(1).map((p, i) => Math.hypot(p[0] - path[i][0], p[1] - path[i][1]));
+    const total = lens.reduce((a, b) => a + b, 0);
+    const duration = Math.max(6, total / SPEED);
+    host?.remove(ghost.root);
+    host = pick.group;
+    host.add(ghost.root);
+    ghost.root.visible = true;
+    const t0 = performance.now();
+    const step = (now) => {
+      if (disposed) return;
+      const t = (now - t0) / 1e3;
+      if (t >= duration || !pick.group.visible) {
+        ghost.root.visible = false;
+        viewer.invalidate();
+        return wait(t < duration);
+      }
+      let d = t / duration * total;
+      let i = 0;
+      while (i < lens.length - 1 && d > lens[i]) d -= lens[i++];
+      const k = lens[i] ? Math.min(1, d / lens[i]) : 1;
+      const a = path[i];
+      const b = path[i + 1] ?? a;
+      const x = a[0] + (b[0] - a[0]) * k;
+      const z = a[1] + (b[1] - a[1]) * k;
+      ghost.root.position.set(x, HEIGHT + Math.sin(t * 2.2) * 0.08, z);
+      ghost.root.rotation.y = Math.atan2(b[0] - a[0], b[1] - a[1]);
+      ghost.root.rotation.z = Math.sin(t * 1.6) * 0.12;
+      const fade = Math.min(1, t / FADE, (duration - t) / FADE);
+      ghost.mats.forEach((m, j) => m.opacity = ghost.opacity[j] * fade);
+      viewer.animate();
+      if (viewer.low) timer = setTimeout(() => raf = requestAnimationFrame(step), 180);
+      else raf = requestAnimationFrame(step);
+    };
+    raf = requestAnimationFrame(step);
+  }
+  wait(true);
+  return {
+    update(building) {
+      plan = building;
+      if (host && ![...viewer.floorMap.values()].some((f) => f.group === host)) {
+        cancelAnimationFrame(raf);
+        host = null;
+        ghost.root.visible = false;
+        wait(true);
+      }
+    },
+    dispose() {
+      disposed = true;
+      clearTimeout(timer);
+      cancelAnimationFrame(raf);
+      host?.remove(ghost.root);
+      viewer.invalidate();
+    }
+  };
+}
+export {
+  startGhost,
+  startPets
+};

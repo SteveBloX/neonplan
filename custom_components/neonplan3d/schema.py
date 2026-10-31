@@ -308,6 +308,9 @@ FURNITURE_SCHEMA = vol.Schema(
         vol.Optional("printer_nozzle"): vol.Any(None, vol.All(str, vol.Length(max=255))),
         vol.Optional("printer_bed"): vol.Any(None, vol.All(str, vol.Length(max=255))),
         vol.Optional("printer_light"): vol.Any(None, vol.All(str, vol.Length(max=255))),
+        # 3D printer: show the real part of the running print (fetched from the printer), and the entity that names the job
+        vol.Optional("printer_model"): bool,
+        vol.Optional("printer_job"): vol.Any(None, vol.All(str, vol.Length(max=255))),
         vol.Optional("fire_y"): vol.Any(None, vol.All(vol.Coerce(float), vol.Range(min=0, max=3))),
         # household: a waste bin's kind and colours, its calendar (Haushalt Pro); a mailbox's emptying door
         vol.Optional("bin_kind"): vol.Any(None, vol.In(WASTE_KINDS)),

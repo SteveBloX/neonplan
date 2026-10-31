@@ -45,6 +45,17 @@ export function printerLinks(hass: HomeAssistant, f: Pick<Furniture, "printer_pr
   };
 }
 
+/** The name of the running print: from the entity chosen by hand, else from the printer's task name or file name sensor. */
+export function printerJob(hass: HomeAssistant, f: Pick<Furniture, "printer_job">, status: string | null): string {
+  const m = status ? /^[a-z_]+\.(.*)print_status$/.exec(status) : null;
+  const candidates = f.printer_job ? [f.printer_job] : m ? [`sensor.${m[1]}task_name`, `sensor.${m[1]}gcode_file`] : [];
+  for (const id of candidates) {
+    const st = hass.states[id];
+    if (st && !isUnavailable(st) && st.state.trim() !== "" && st.state !== "unknown") return st.state.trim();
+  }
+  return "";
+}
+
 /** The phase a status word means (Bambu Lab's: running, pause, finish, failed …; others': printing, paused, complete …). */
 export function printPhase(st: HassEntity | undefined): PrintPhase {
   if (!st || st.state === "unavailable" || st.state === "offline") return "offline";

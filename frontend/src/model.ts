@@ -223,6 +223,9 @@ export interface Furniture {
   printer_nozzle?: EntityRef;
   printer_bed?: EntityRef;
   printer_light?: EntityRef;
+  /** 3D printer: show the real part of the running print inside it (the sliced file is fetched from the printer), and the entity that names the job (null = found by name). */
+  printer_model?: boolean;
+  printer_job?: EntityRef;
   /** Gate: its smart lock (lock.*) – a light on the post, blue while locked and amber while not. */
   gate_lock?: EntityRef;
   /** Waste bin: what goes in (decides its usual colours and its words in the waste calendar; null = rest). */
